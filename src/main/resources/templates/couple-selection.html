@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Best Couple Award Selection - King & Queen Voting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" th:href="@{/styles.css}">
+    <style>
+        .navy-text {
+            color: #1e3a8a;
+        }
+        
+        .navy-bg {
+            background-color: #1e3a8a;
+        }
+        
+        .radio-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 20px;
+            justify-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .radio-grid:last-child {
+            grid-template-columns: repeat(4, 1fr);
+            margin-bottom: 0;
+        }
+        
+        .radio-custom-selection {
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border: 2px solid #6b7280;
+            border-radius: 50%;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s;
+        }
+        
+        .radio-custom-selection:checked {
+            background: #1e3a8a;
+            border: 2px solid #1e3a8a;
+        }
+        
+        .radio-custom-selection:checked::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+        }
+        
+        .radio-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        .next-button {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+            transition: all 0.3s ease;
+        }
+        
+        .next-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
+        }
+        
+        .selection-box {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+
+        .image-container {
+            padding: 24px;
+            padding-bottom: 16px;
+        }
+
+        .candidate-image {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            border-radius: 16px;
+            transition: all 0.4s ease;
+        }
+
+        .candidate-info {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-md mx-auto space-y-8">
+        <!-- Main Card with Carousel -->
+        <div class="bg-white rounded-3xl overflow-hidden card-shadow">
+            <!-- Title -->
+            <div class="p-6 text-center">
+                <h1 class="text-2xl font-bold navy-text">BEST COUPLE Award</h1>
+            </div>
+            
+            <!-- Image Display -->
+            <div class="image-container">
+                <img id="candidate-image" src="" alt="Best couple candidate" class="candidate-image">
+            </div>
+            
+            <!-- Navy Background Info Section -->
+            <div class="navy-bg text-white text-center py-6 px-6">
+                <div class="space-y-1 candidate-info" id="candidate-info">
+                    <p class="text-lg font-semibold" id="candidate-number">No 1</p>
+                    <p class="text-lg font-semibold" id="candidate-name">Alexander Crown</p>
+                    <p class="text-lg font-semibold" id="candidate-department">Civil Engineering</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Radio Button Selection Box -->
+        <div class="selection-box">
+            <form id="selection-form">
+                <div id="options-container" class="radio-grid"></div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Next Button -->
+    <div class="fixed bottom-8 left-8">
+        <button id="prev-btn" class="bg-gray-200 text-gray-800 px-8 py-3 rounded-full font-semibold text-lg hover:bg-gray-300 transition">
+            Previous
+        </button>
+    </div>
+    
+    <div class="fixed bottom-8 right-8">
+        <button class="next-button text-white px-8 py-3 rounded-full font-semibold text-lg" id="next-btn">
+            Submit
+        </button>
+    </div>
+
+    <!-- Error Modal for missing selection -->
+    <div id="selection-error-modal" class="hidden fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full card-shadow slide-in">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">No Selection</h3>
+                <p class="text-gray-600 mb-6">Please choose a BEST COUPLE candidate before continuing.</p>
+                
+                <button onclick="closeSelectionErrorModal()" class="w-full gradient-bg text-white py-3 rounded-xl font-semibold hover:opacity-90 transition">
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/js/voting.js}"></script>
+    <script th:inline="javascript">
+        const SUMMARY_URL = /*[[@{/summary}]]*/ '/summary';
+        const PRINCESS_SELECTION_URL = /*[[@{/princess-selection}]]*/ '/princess-selection';
+
+        VotingApp.initSelectionPage({
+            category: 'COUPLE',
+            nextUrl: SUMMARY_URL,
+            prevUrl: PRINCESS_SELECTION_URL
+        });
+    </script>
+</body>
+</html>

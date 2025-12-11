@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Success - King & Queen Voting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" th:href="@{/styles.css}">
+</head>
+<body class="bg-gray-50">
+    <!-- Success Screen -->
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full card-shadow slide-in">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Voting Successful!</h3>
+                <p class="text-gray-600 mb-6">Your votes have been submitted successfully. Thank you for participating!</p>
+                
+                <div class="bg-gray-50 rounded-xl p-4 mb-6 text-left">
+                    <p class="text-sm text-gray-600 mb-2">Your votes:</p>
+                    <p class="font-semibold text-gray-800" id="voted-king">King: -</p>
+                    <p class="font-semibold text-gray-800" id="voted-queen">Queen: -</p>
+                    <p class="font-semibold text-gray-800" id="voted-prince">Prince: -</p>
+                    <p class="font-semibold text-gray-800" id="voted-princess">Princess: -</p>
+                    <p class="font-semibold text-gray-800" id="voted-couple">Best Couple: -</p>
+                </div>
+                
+                <button onclick="resetVoting()" class="w-full gradient-bg text-white py-3 rounded-xl font-semibold hover:opacity-90 transition">
+                    Return to Home
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        // Display vote information
+        const selectedKing = JSON.parse(localStorage.getItem('selectedKing') || '{}');
+        const selectedQueen = JSON.parse(localStorage.getItem('selectedQueen') || '{}');
+        const selectedPrince = JSON.parse(localStorage.getItem('selectedPrince') || '{}');
+        const selectedPrincess = JSON.parse(localStorage.getItem('selectedPrincess') || '{}');
+        const selectedCouple = JSON.parse(localStorage.getItem('selectedCouple') || '{}');
+
+        document.getElementById('voted-king').textContent = `King: ${selectedKing.name || 'Not selected'}`;
+        document.getElementById('voted-queen').textContent = `Queen: ${selectedQueen.name || 'Not selected'}`;
+        document.getElementById('voted-prince').textContent = `Prince: ${selectedPrince.name || 'Not selected'}`;
+        document.getElementById('voted-princess').textContent = `Princess: ${selectedPrincess.name || 'Not selected'}`;
+        document.getElementById('voted-couple').textContent = `Best Couple: ${selectedCouple.name || 'Not selected'}`;
+
+        const LANDING_URL = /*[[@{/}]]*/ '/';
+
+        function resetVoting() {
+            localStorage.clear();
+            window.location.href = LANDING_URL;
+        }
+    </script>
+</body>
+</html>

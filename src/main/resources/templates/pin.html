@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enter PIN - King & Queen Voting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" th:href="@{/styles.css}">
+</head>
+<body class="bg-gray-50">
+    <!-- PIN Screen -->
+    <div class="min-h-screen gradient-bg flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 md:p-12 max-w-md w-full card-shadow slide-in">
+            <div class="text-center mb-6 md:mb-8">
+                <div class="w-16 h-16 md:w-20 md:h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 md:w-10 md:h-10 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl md:text-2xl font-bold text-gray-800 mb-2">Enter Your PIN</h3>
+                <p class="text-sm md:text-base text-gray-600">Please enter your 5-digit PIN to continue</p>
+            </div>
+            
+            <div class="flex justify-center gap-3 md:gap-4 mb-6 md:mb-8">
+                <input type="password" maxlength="1" class="pin-input" id="pin1" oninput="moveFocus(this, 'pin2')" onkeydown="handleBackspace(event, this, null)">
+                <input type="password" maxlength="1" class="pin-input" id="pin2" oninput="moveFocus(this, 'pin3')" onkeydown="handleBackspace(event, this, 'pin1')">
+                <input type="password" maxlength="1" class="pin-input" id="pin3" oninput="moveFocus(this, 'pin4')" onkeydown="handleBackspace(event, this, 'pin2')">
+                <input type="password" maxlength="1" class="pin-input" id="pin4" oninput="moveFocus(this, 'pin5')" onkeydown="handleBackspace(event, this, 'pin3')">
+                <input type="password" maxlength="1" class="pin-input" id="pin5" onkeydown="handleBackspace(event, this, 'pin4')">
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 md:gap-3 mb-4">
+                <button onclick="addPin('1')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">1</button>
+                <button onclick="addPin('2')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">2</button>
+                <button onclick="addPin('3')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">3</button>
+                <button onclick="addPin('4')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">4</button>
+                <button onclick="addPin('5')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">5</button>
+                <button onclick="addPin('6')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">6</button>
+                <button onclick="addPin('7')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">7</button>
+                <button onclick="addPin('8')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">8</button>
+                <button onclick="addPin('9')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">9</button>
+                <button onclick="clearPin()" class="bg-red-100 hover:bg-red-200 text-red-600 font-semibold py-3 md:py-4 rounded-xl transition text-sm md:text-base">Clear</button>
+                <button onclick="addPin('0')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">0</button>
+                <button onclick="deletePin()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">←</button>
+            </div>
+
+            <button type="button" onclick="handleContinue()" class="w-full gradient-bg text-white py-3 md:py-4 rounded-xl font-semibold hover:opacity-90 transition">
+                Continue
+            </button>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="hidden fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full card-shadow slide-in">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-4" id="error-title">Unable to continue</h3>
+                <p class="text-gray-600 mb-6" id="error-message">The PIN you entered is incorrect. Please try again.</p>
+                
+                <button data-close-modal="error-modal" class="w-full gradient-bg text-white py-3 rounded-xl font-semibold hover:opacity-90 transition">
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/js/voting.js}"></script>
+    <script th:inline="javascript">
+        const KING_SELECTION_URL = /*[[@{/king-selection}]]*/ '/king-selection';
+
+        document.getElementById('pin1').focus();
+
+        function moveFocus(current, nextId) {
+            if (current.value.length === 1 && nextId) {
+                document.getElementById(nextId).focus();
+            }
+        }
+
+        function handleBackspace(event, current, prevId) {
+            if (event.key === 'Backspace' && current.value === '' && prevId) {
+                document.getElementById(prevId).focus();
+            }
+        }
+
+        function addPin(digit) {
+            const pins = ['pin1', 'pin2', 'pin3', 'pin4', 'pin5'];
+            for (let i = 0; i < pins.length; i++) {
+                const input = document.getElementById(pins[i]);
+                if (input.value === '') {
+                    input.value = digit;
+                    if (i < 4) {
+                        document.getElementById(pins[i + 1]).focus();
+                    } else {
+                        verifyPin();
+                    }
+                    break;
+                }
+            }
+        }
+
+        function deletePin() {
+            const pins = ['pin1', 'pin2', 'pin3', 'pin4', 'pin5'];
+            for (let i = pins.length - 1; i >= 0; i--) {
+                const input = document.getElementById(pins[i]);
+                if (input.value !== '') {
+                    input.value = '';
+                    input.focus();
+                    break;
+                }
+            }
+        }
+
+        function clearPin() {
+            ['pin1', 'pin2', 'pin3', 'pin4', 'pin5'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+            document.getElementById('pin1').focus();
+        }
+
+        function getEnteredPin() {
+            const pin = ['pin1', 'pin2', 'pin3', 'pin4', 'pin5']
+                .map(id => document.getElementById(id).value)
+                .join('');
+            return pin;
+        }
+
+        const errorModal = document.getElementById('error-modal');
+        const errorMessage = document.getElementById('error-message');
+        const errorTitle = document.getElementById('error-title');
+
+        function showError(message, title = 'Unable to continue') {
+            errorTitle.textContent = title;
+            errorMessage.textContent = message;
+            errorModal.classList.remove('hidden');
+            clearPin();
+        }
+
+        async function handleContinue() {
+            const pin = getEnteredPin();
+            if (pin.length !== 5) {
+                showError('Please enter your 5-digit PIN.');
+                return;
+            }
+
+            try {
+                const result = await VotingApp.verifyPin(pin);
+                if (!result.valid) {
+                    showError('The PIN you entered does not exist. Please try again.', 'Invalid PIN');
+                    return;
+                }
+                if (result.alreadyVoted) {
+                    showError('This PIN has already been used to vote. Please contact an admin if you believe this is an error.', 'Already voted');
+                    return;
+                }
+                VotingApp.savePin(pin);
+                VotingApp.getDeviceId();
+                window.location.href = KING_SELECTION_URL;
+            } catch (err) {
+                showError(err.message || 'Something went wrong while verifying your PIN.');
+            }
+        }
+
+        document.querySelectorAll('[data-close-modal]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const targetId = btn.getAttribute('data-close-modal');
+                const modal = document.getElementById(targetId);
+                if (modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

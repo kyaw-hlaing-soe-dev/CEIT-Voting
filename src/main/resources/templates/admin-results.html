@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Admin Live Results — KTU Voting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" th:href="@{/styles.css}" />
+</head>
+<body class="bg-gray-50 text-gray-800">
+<div class="min-h-screen flex flex-col">
+    <header class="bg-white shadow">
+        <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <img src="/images/logo.png" alt="logo" class="w-10 h-10"/>
+                <div>
+                    <div class="text-xl font-bold">KTU Voting — Live Results</div>
+                    <div class="text-sm text-gray-500">Real-time summary of votes</div>
+                </div>
+            </div>
+            <div>
+                <button id="refreshBtn" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Refresh</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-6 flex-1">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <!-- Cards will be populated here -->
+            <div id="resultsContainer" class="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+            <aside class="bg-white p-4 rounded-lg shadow">
+                <h3 class="font-semibold mb-2">Stats & Controls</h3>
+                <div class="text-sm text-gray-500 mb-4">Use the admin PIN to unlock live updates.</div>
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-gray-600">Admin PIN</label>
+                    <input id="adminPinInput" type="password" class="mt-1 block w-full rounded border-gray-200 p-2" placeholder="Enter admin PIN">
+                </div>
+                <div class="flex gap-2">
+                    <button id="unlockBtn" class="px-3 py-2 rounded bg-green-600 text-white">Unlock</button>
+                    <button id="lockBtn" class="px-3 py-2 rounded bg-red-100 text-red-600">Lock</button>
+                </div>
+                <div id="status" class="mt-4 text-sm text-gray-600">Status: locked</div>
+            </aside>
+        </div>
+
+        <section class="mt-6">
+            <h4 class="text-lg font-semibold mb-3">Full detail</h4>
+            <div id="detailTable" class="bg-white rounded-lg shadow p-4">
+                <!-- table injected here -->
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-white border-t py-4">
+        <div class="container mx-auto px-4 text-sm text-gray-500">© KTU Voting</div>
+    </footer>
+</div>
+
+<script th:inline="javascript">
+    const resultsContainer = document.getElementById('resultsContainer');
+    const detailTable = document.getElementById('detailTable');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const unlockBtn = document.getElementById('unlockBtn');
+    const lockBtn = document.getElementById('lockBtn');
+    const adminPinInput = document.getElementById('adminPinInput');
+    const statusEl = document.getElementById('status');
+
+    let adminPin = '';
+    let polling = null;
+
+    function renderCards(data) {
+        resultsContainer.innerHTML = '';
+        for (const role in data) {
+            const card = document.createElement('div');
+            card.className = 'bg-white p-4 rounded-lg shadow';
+            const title = document.createElement('div');
+            title.className = 'font-bold mb-2';
+            title.textContent = role;
+            card.appendChild(title);
+
+            const list = document.createElement('div');
+            list.className = 'space-y-2';
+            const counts = data[role];
+            for (const candidate in counts) {
+                const row = document.createElement('div');
+                row.className = 'flex justify-between text-sm';
+                row.innerHTML = `<div>#${candidate}</div><div class="font-semibold">${counts[candidate]}</div>`;
+                list.appendChild(row);
+            }
+            card.appendChild(list);
+            resultsContainer.appendChild(card);
+        }
+    }
+
+    function renderDetail(data) {
+        let html = '<table class="w-full text-left text-sm"><thead><tr><th class="p-2">Role</th><th class="p-2">Candidate</th><th class="p-2">Count</th></tr></thead><tbody>';
+        for (const role in data) {
+            const counts = data[role];
+            for (const candidate in counts) {
+                html += `<tr><td class="p-2 border-t">${role}</td><td class="p-2 border-t">#${candidate}</td><td class="p-2 border-t">${counts[candidate]}</td></tr>`;
+            }
+        }
+        html += '</tbody></table>';
+        detailTable.innerHTML = html;
+    }
+
+    async function fetchResults() {
+        if (!adminPin) return;
+        try {
+            const r = await fetch(`/api/admin/results?adminPin=${encodeURIComponent(adminPin)}`);
+            if (!r.ok) {
+                console.warn('unauthorized or error fetching');
+                lock();
+                return;
+            }
+            const data = await r.json();
+            renderCards(data);
+            renderDetail(data);
+        } catch (e) {
+            console.error('fetch error', e);
+        }
+    }
+
+    function unlock() {
+        adminPin = adminPinInput.value.trim();
+        if (!adminPin) return;
+        statusEl.textContent = 'Status: unlocked';
+        if (polling) clearInterval(polling);
+        fetchResults();
+        polling = setInterval(fetchResults, 4000);
+    }
+
+    function lock() {
+        adminPin = '';
+        statusEl.textContent = 'Status: locked';
+        if (polling) {
+            clearInterval(polling);
+            polling = null;
+        }
+        resultsContainer.innerHTML = '';
+        detailTable.innerHTML = '';
+    }
+
+    refreshBtn.addEventListener('click', () => fetchResults());
+    unlockBtn.addEventListener('click', () => unlock());
+    lockBtn.addEventListener('click', () => lock());
+
+    // quick unlock if ADMIN_PIN is available client-side (not recommended for production)
+    const KNOWN_ADMIN_PIN = /*[[${@environment.getProperty('admin.pin')}]]*/ '99999';
+    if (KNOWN_ADMIN_PIN) {
+        adminPinInput.placeholder = 'Enter admin PIN (hint available locally)';
+    }
+</script>
+</body>
+</html>
