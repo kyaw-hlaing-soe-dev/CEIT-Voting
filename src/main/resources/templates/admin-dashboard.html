@@ -14,6 +14,11 @@
 
     <link rel="stylesheet" th:href="@{/styles.css}" />
 
+    <style>
+        .thumbnail { width:44px; height:44px; object-fit:cover; border-radius:9999px; }
+        .table-scroll { max-height:420px; overflow:auto; }
+    </style>
+
 </head>
 
 <body class="bg-gray-50 text-gray-800">
@@ -23,108 +28,103 @@
     <header class="bg-white shadow">
         <div class="container mx-auto px-4 py-4 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <img src="/images/logo.png" alt="logo" class="w-10 h-10"/>
+                <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='100%' height='100%' rx='6' fill='%234F46E5'/><text x='50%' y='54%' font-family='Arial' font-size='14' fill='white' text-anchor='middle'>KTU</text></svg>" th:src="@{/images/logo.png}" alt="KTU logo" class="w-10 h-10"/>
                 <div>
                     <div class="text-xl font-bold">KTU Voting — Admin Dashboard</div>
                     <div class="text-sm text-gray-500">Live Results & Candidate Management</div>
                 </div>
             </div>
-            <div>
-                <button id="manualRefreshBtn" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Refresh Now</button>
+            <div class="flex items-center gap-3">
+                <div id="modeBadge" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">Mode</div>
+                <button id="btn-live" class="px-4 py-2 rounded bg-white border border-gray-200">Live Results</button>
+                <button id="btn-manage" class="px-4 py-2 rounded bg-indigo-600 text-white">Candidate Management</button>
+                <button id="manualRefreshBtn" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Refresh Now</button>
             </div>
         </div>
     </header>
 
     <main class="container mx-auto px-4 py-6 flex-1">
 
-        <!-- PIN gate -->
-        <section id="pinSection" class="max-w-md mx-auto bg-white p-6 rounded-lg shadow">
-            <h2 class="text-lg font-semibold mb-2">Admin Access</h2>
-            <p class="text-sm text-gray-600 mb-4">Enter the 5-digit admin PIN to unlock the live dashboard.</p>
-            <form id="pinForm" class="flex gap-2" onsubmit="event.preventDefault(); return false;">
-                <input id="pinInput" name="pin" type="password" maxlength="5" inputmode="numeric"
-                       pattern="[0-9]*"
-                       class="flex-1 rounded border-gray-200 p-2" placeholder="Admin PIN" required />
-                <button id="pinSubmit" type="button" class="px-4 py-2 rounded bg-indigo-600 text-white">Unlock</button>
-            </form>
-            <div id="pinMessage" class="mt-3 text-sm text-red-600" style="display:none;"></div>
-        </section>
+        <!-- Dashboard content (visible by default) -->
+        <div id="dashboard" class="mt-6">
+            <div id="fetchError" class="mb-4 text-sm text-red-600" style="display:none;"></div>
 
-        <!-- Dashboard content (hidden until PIN accepted) -->
-        <div id="dashboard" style="display:none;" class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Live Results View -->
+            <section id="view-live" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- category cards inserted here -->
+                </div>
+            </section>
 
-            <!-- Live Results (left/center) -->
-            <div class="lg:col-span-2">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 class="font-semibold">Live Results</h3>
-                        <div class="text-sm text-gray-600" id="lastUpdated">Last updated: --</div>
+            <!-- Candidate Management View -->
+            <section id="view-manage" class="hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Form card -->
+                    <div class="lg:col-span-1">
+                        <div class="bg-white p-4 rounded-lg card-shadow">
+                            <h3 class="font-semibold mb-3">Add / Edit Candidate</h3>
+                            <form id="candidate-form" class="space-y-4">
+                                <input type="hidden" id="candidate-id" />
+                                <div>
+                                    <label for="candidate-name" class="block text-sm font-medium text-gray-700">Name</label>
+                                    <input id="candidate-name" type="text" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm p-2" required />
+                                </div>
+
+                                <div>
+                                    <label for="candidate-category" class="block text-sm font-medium text-gray-700">Category</label>
+                                    <select id="candidate-category" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm p-2" required>
+                                        <!-- options injected -->
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label for="candidate-dept" class="block text-sm font-medium text-gray-700">Department</label>
+                                    <input id="candidate-dept" type="text" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm p-2" />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Image</label>
+                                    <input id="candidate-image" type="file" accept="image/*" class="mt-1 block w-full" />
+                                    <div class="mt-3 flex items-center gap-3">
+                                        <img id="image-preview" src="" alt="preview" class="w-16 h-16 rounded-full object-cover border" />
+                                        <span id="image-filename" class="text-sm text-gray-500"></span>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-3">
+                                    <button type="submit" class="px-4 py-2 bg-gradient-to-r from-blue-700 to-indigo-600 text-white rounded-md shadow-lg">Save</button>
+                                    <button type="button" id="btn-reset" class="px-3 py-2 rounded-md border border-gray-200">Reset</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
 
-                    <table id="results-table" class="w-full text-left text-sm border-collapse">
-                        <thead>
-                            <tr class="bg-gray-100">
-                                <th class="p-2 border">#</th>
-                                <th class="p-2 border">Name</th>
-                                <th class="p-2 border">Department</th>
-                                <th class="p-2 border">Category</th>
-                                <th class="p-2 border">Votes</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- populated by admin-dashboard.js -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Candidate Management (right) -->
-            <aside class="bg-white p-4 rounded-lg shadow">
-                <h3 class="font-semibold mb-2">Candidate Management</h3>
-
-                <!-- Create -->
-                <div class="mb-4">
-                    <form id="createForm" class="space-y-2">
-                        <div>
-                            <label class="block text-xs">Category</label>
-                            <select id="createCategory" class="mt-1 block w-full rounded border-gray-200 p-2">
-                                <option value="KING">KING</option>
-                                <option value="QUEEN">QUEEN</option>
-                                <option value="PRINCE">PRINCE</option>
-                                <option value="PRINCESS">PRINCESS</option>
-                                <option value="COUPLE">COUPLE</option>
-                            </select>
+                    <!-- Candidate list -->
+                    <div class="lg:col-span-2">
+                        <div class="bg-white p-4 rounded-lg card-shadow">
+                            <h3 class="font-semibold mb-3">Candidates</h3>
+                            <div class="overflow-auto">
+                                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left text-xs text-gray-500">#</th>
+                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Candidate</th>
+                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Category</th>
+                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Dept</th>
+                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Votes</th>
+                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="candidates-tbody" class="bg-white divide-y divide-gray-100">
+                                        <!-- rows injected -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-xs">Candidate Number</label>
-                            <input id="createNumber" type="number" class="mt-1 block w-full rounded border-gray-200 p-2" />
-                        </div>
-                        <div>
-                            <label class="block text-xs">Name</label>
-                            <input id="createName" type="text" class="mt-1 block w-full rounded border-gray-200 p-2" />
-                        </div>
-                        <div>
-                            <label class="block text-xs">Department</label>
-                            <input id="createDept" type="text" class="mt-1 block w-full rounded border-gray-200 p-2" />
-                        </div>
-                        <div class="flex gap-2">
-                            <button id="createBtn" type="button" class="px-3 py-2 rounded bg-green-600 text-white">Create</button>
-                            <button id="refreshCandidatesBtn" type="button" class="px-3 py-2 rounded bg-gray-100">Refresh List</button>
-                        </div>
-                        <div id="createMsg" class="text-sm mt-2" style="display:none;"></div>
-                    </form>
-                </div>
-
-                <hr class="my-3" />
-
-                <!-- Candidate list + update/delete -->
-                <div>
-                    <h4 class="text-sm font-semibold mb-2">Current Candidates</h4>
-                    <div id="candidatesList" class="space-y-2 text-sm">
-                        <!-- populated by admin-dashboard.js -->
                     </div>
+
                 </div>
-            </aside>
+            </section>
 
         </div>
 
@@ -135,7 +135,524 @@
     </footer>
 </div>
 
-<script src="/js/admin-dashboard.js"></script>
+<!-- Scripts: mocked fetch and UI logic -->
+<script>
+    // Plan: keep PIN gate, expose two views toggled by header buttons; mock /api/results and /api/candidates; implement Live Results (5 category top-5 tables) and Candidate Management CRUD with image preview and FormData logging.
+
+    (function(){
+        // Categories used by UI; expose whether mock mode is enabled below
+        const CATEGORIES = ['KING','QUEEN','PRINCE','PRINCESS','COUPLE'];
+
+        // Decide mock mode: default OFF. Enable by setting window.__USE_MOCK = true in the console or append ?mock=true to the URL.
+        const USE_MOCK = (window.__USE_MOCK === true) || window.location.search.includes('mock=true');
+
+        // If mock is disabled we keep native fetch (server-backed endpoints will be used).
+        if (!USE_MOCK){
+            return; // do not override fetch
+        }
+
+        // placeholder image (SVG Data URL)
+        function placeholderImage(text, size=80){
+            const t = encodeURIComponent((text||'Img').slice(0,12));
+            const color = '1F2937';
+            const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><rect width='100%' height='100%' rx='8' fill='%23${color}'/><text x='50%' y='54%' font-family='Helvetica, Arial' font-size='14' fill='white' text-anchor='middle' alignment-baseline='middle'>${t}</text></svg>`;
+            return 'data:image/svg+xml;utf8,' + svg;
+        }
+
+        // Seed data (simulate GET responses)
+        let mockCandidates = [
+            { id:1, name:'Arthur King', department:'History', category:'KING', votes:240, imageUrl: placeholderImage('Arthur') },
+            { id:2, name:'Beatrice Queen', department:'Arts', category:'QUEEN', votes:220, imageUrl: placeholderImage('Beatrice') },
+            { id:3, name:'Cody Prince', department:'Engineering', category:'PRINCE', votes:180, imageUrl: placeholderImage('Cody') },
+            { id:4, name:'Diana Princess', department:'Science', category:'PRINCESS', votes:205, imageUrl: placeholderImage('Diana') },
+            { id:5, name:'Eva Couple', department:'Business', category:'COUPLE', votes:150, imageUrl: placeholderImage('Eva') },
+            { id:6, name:'Frank King', department:'Math', category:'KING', votes:130, imageUrl: placeholderImage('Frank') },
+            { id:7, name:'Gina Queen', department:'Design', category:'QUEEN', votes:110, imageUrl: placeholderImage('Gina') },
+            { id:8, name:'Hugo Prince', department:'Law', category:'PRINCE', votes:95, imageUrl: placeholderImage('Hugo') },
+            { id:9, name:'Iris Princess', department:'Medicine', category:'PRINCESS', votes:87, imageUrl: placeholderImage('Iris') },
+            { id:10, name:'Jay Couple', department:'Economics', category:'COUPLE', votes:102, imageUrl: placeholderImage('Jay') }
+        ];
+
+        let nextId = mockCandidates.length + 1;
+
+        // preserve native fetch
+        const nativeFetch = window.fetch.bind(window);
+
+        // helper to simulate delay
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
+        // helper to read File as DataURL
+        function readFileAsDataURL(file){
+            return new Promise((res, rej) => {
+                const r = new FileReader();
+                r.onload = () => res(r.result);
+                r.onerror = err => rej(err);
+                r.readAsDataURL(file);
+            });
+        }
+
+        // Mock fetch for our endpoints
+        window.fetch = async function(input, init={}){
+            const url = typeof input === 'string' ? input : input.url;
+            const method = (init && init.method) ? init.method.toUpperCase() : (typeof input === 'object' && input.method ? input.method : 'GET');
+
+            // GET /api/results
+            if (url.endsWith('/api/results') && method === 'GET'){
+                await delay(80);
+                return { ok:true, status:200, json: async ()=> ({ results: mockCandidates.map(c=>({ id:c.id, name:c.name, department:c.department, category:c.category, votes:c.votes, imageUrl:c.imageUrl })) }) };
+            }
+
+            // GET /api/candidates
+            if (url.endsWith('/api/candidates') && method === 'GET'){
+                await delay(60);
+                return { ok:true, status:200, json: async ()=> ({ candidates: mockCandidates.map(c=>({ ...c })) }) };
+            }
+
+            // POST /api/candidates
+            if (url.endsWith('/api/candidates') && method === 'POST'){
+                // try to get FormData
+                let formData = null;
+                if (init && init.body && typeof init.body.get === 'function') formData = init.body;
+                else if (input instanceof Request){ try{ formData = await input.formData(); } catch(e){} }
+
+                console.group('Mock POST /api/candidates - FormData');
+                if (formData){ for (let pair of formData.entries()) console.log(pair[0], pair[1]); } else { console.log('No FormData'); }
+                console.groupEnd();
+
+                const candidate = { id: nextId++, name:'Unnamed', department:'', category: CATEGORIES[0], votes:0, imageUrl: placeholderImage('New') };
+                if (formData){
+                    candidate.name = formData.get('name') || candidate.name;
+                    candidate.department = formData.get('department') || candidate.department;
+                    candidate.category = formData.get('category') || candidate.category;
+                    const file = formData.get('image');
+                    if (file && file.size){ candidate.imageUrl = await readFileAsDataURL(file); }
+                }
+                mockCandidates.push(candidate);
+                await delay(120);
+                return { ok:true, status:201, json: async ()=> ({ candidate }) };
+            }
+
+            // PUT /api/candidates/{id}
+            if (url.match(/\/api\/candidates\/\d+$/) && method === 'PUT'){
+                const id = parseInt(url.split('/').pop(),10);
+                let formData = null;
+                if (init && init.body && typeof init.body.get === 'function') formData = init.body;
+                else if (input instanceof Request){ try{ formData = await input.formData(); } catch(e){} }
+
+                console.group(`Mock PUT /api/candidates/${id}`);
+                if (formData){ for (let pair of formData.entries()) console.log(pair[0], pair[1]); }
+                console.groupEnd();
+
+                const idx = mockCandidates.findIndex(c=>c.id===id);
+                if (idx===-1) return { ok:false, status:404, json: async ()=> ({ error:'Not found' }) };
+                const updated = { ...mockCandidates[idx] };
+                if (formData){
+                    updated.name = formData.get('name') || updated.name;
+                    updated.department = formData.get('department') || updated.department;
+                    updated.category = formData.get('category') || updated.category;
+                    const file = formData.get('image');
+                    if (file && file.size){ updated.imageUrl = await readFileAsDataURL(file); }
+                }
+                mockCandidates[idx] = updated;
+                await delay(80);
+                return { ok:true, status:200, json: async ()=> ({ candidate: updated }) };
+            }
+
+            // DELETE /api/candidates/{id}
+            if (url.match(/\/api\/candidates\/\d+$/) && method === 'DELETE'){
+                const id = parseInt(url.split('/').pop(),10);
+                console.log('Mock DELETE candidate', id);
+                const idx = mockCandidates.findIndex(c=>c.id===id);
+                if (idx===-1) return { ok:false, status:404, json: async ()=> ({ error:'Not found' }) };
+                mockCandidates.splice(idx,1);
+                await delay(40);
+                return { ok:true, status:200, json: async ()=> ({ success:true }) };
+            }
+
+            // fallback
+            return nativeFetch(input, init);
+        };
+
+        // Expose categories for UI
+        window.__CATEGORIES = CATEGORIES;
+
+    })();
+
+    // UI code: PIN, navigation, rendering, and form handlers
+    (function(){
+        // Categories will be populated from window.__CATEGORIES (set by mock) or derived from server data
+        let categories = (window.__CATEGORIES && Array.isArray(window.__CATEGORIES)) ? window.__CATEGORIES.slice() : [];
+
+        // Elements
+        const dashboard = document.getElementById('dashboard');
+
+        const btnLive = document.getElementById('btn-live');
+        const btnManage = document.getElementById('btn-manage');
+        const manualRefreshBtn = document.getElementById('manualRefreshBtn');
+
+        const viewLive = document.getElementById('view-live');
+        const viewManage = document.getElementById('view-manage');
+
+        const candidateForm = document.getElementById('candidate-form');
+        const candidateIdInput = document.getElementById('candidate-id');
+        const nameInput = document.getElementById('candidate-name');
+        const categorySelect = document.getElementById('candidate-category');
+        const deptInput = document.getElementById('candidate-dept');
+        const imageInput = document.getElementById('candidate-image');
+        const imagePreview = document.getElementById('image-preview');
+        const imageFilename = document.getElementById('image-filename');
+        const btnReset = document.getElementById('btn-reset');
+        const candidatesTbody = document.getElementById('candidates-tbody');
+
+        // Config
+        const ADMIN_PIN = '99999'; // used for admin operations against /api/admin/*
+
+        // init
+        async function init(){
+            // If categories aren't provided by the mock layer, derive them from the server-side results (/api/results/all)
+            if (!categories || categories.length === 0){
+                try{
+                    const res = await fetch('/api/results/all', { credentials: 'same-origin', headers:{ 'Accept':'application/json' } });
+                    if (res && res.ok){
+                        const payload = await res.json();
+                        // payload is an array of ResultDTO, each has a category field
+                        const set = new Set();
+                        (payload || []).forEach(r => { if (r && r.category) set.add(String(r.category)); });
+                        categories = Array.from(set);
+                        if (!categories.length) categories = ['KING','QUEEN','PRINCE','PRINCESS','COUPLE'];
+                    } else {
+                        categories = ['KING','QUEEN','PRINCE','PRINCESS','COUPLE'];
+                    }
+                } catch(e){
+                    categories = ['KING','QUEEN','PRINCE','PRINCESS','COUPLE'];
+                }
+            }
+
+            populateCategorySelect();
+            attachEvents();
+            // Show mock/live mode in header badge
+            try {
+                const modeBadge = document.getElementById('modeBadge');
+                const isMock = (window.__USE_MOCK === true) || window.location.search.includes('mock=true');
+                if (modeBadge){
+                    modeBadge.textContent = isMock ? 'Mock Mode' : 'Live Mode';
+                    modeBadge.classList.toggle('bg-indigo-600', isMock);
+                    modeBadge.classList.toggle('text-white', isMock);
+                    modeBadge.classList.toggle('bg-gray-100', !isMock);
+                    modeBadge.classList.toggle('text-gray-700', !isMock);
+                }
+            } catch(e){ /* ignore */ }
+
+            // Immediately refresh and show the default view
+            await refreshAll();
+            showView('live');
+        }
+
+        // cache of loaded candidates (flat list) to support edit flow
+        let candidatesCache = [];
+
+        function populateCategorySelect(){
+            categorySelect.innerHTML = '';
+            (categories || []).forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; categorySelect.appendChild(o); });
+        }
+
+        function attachEvents(){
+            btnLive.addEventListener('click', ()=> showView('live'));
+            btnManage.addEventListener('click', ()=> showView('manage'));
+            manualRefreshBtn.addEventListener('click', async ()=>{ await refreshAll(); showToast('Refreshed'); });
+            imageInput.addEventListener('change', onImageChange);
+            candidateForm.addEventListener('submit', onSubmitCandidate);
+            btnReset.addEventListener('click', resetForm);
+        }
+
+        function showToast(msg='Saved', ms=1400){
+            const t = document.createElement('div');
+            t.textContent = msg; t.className = 'fixed right-6 bottom-6 bg-gray-900 text-white px-4 py-2 rounded shadow';
+            document.body.appendChild(t);
+            setTimeout(()=> t.remove(), ms);
+        }
+
+
+        // Image preview
+        function onImageChange(e){
+            const file = e.target.files && e.target.files[0];
+            if (!file){ imagePreview.src = ''; imageFilename.textContent = ''; return; }
+            imageFilename.textContent = file.name;
+            const reader = new FileReader();
+            reader.onload = ()=> imagePreview.src = reader.result;
+            reader.readAsDataURL(file);
+        }
+
+        // Render Live Results: create 5 category tables showing Top 5 by votes
+        async function renderLiveResults(){
+            const container = viewLive.querySelector('div.grid');
+            container.innerHTML = '';
+            try{
+                // Use /api/results/all which returns an array of ResultDTO
+                const res = await fetch('/api/results/all', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                if (!res.ok) throw new Error('Status ' + res.status);
+                const payload = await res.json();
+                document.getElementById('fetchError').style.display = 'none';
+                const allResults = payload || [];
+
+                // build grouped map: category -> candidates array
+                const grouped = {};
+                (categories || []).forEach(c => grouped[c]=[]);
+                allResults.forEach(r => {
+                    const catKey = String(r.category);
+                    grouped[catKey] = (r.candidates || []).map(ci => ({ id: ci.id, name: ci.name || ci.name, department: ci.department || '', votes: ci.voteCount || ci.voteCount || 0, imageUrl: ci.imageUrl || ci.imageUrl }));
+                });
+
+                (categories || []).forEach(cat => {
+                    const arr = (grouped[cat]||[]).slice().sort((a,b)=> b.votes - a.votes).slice(0,5);
+
+                    // map category name to CSS class defined in styles.css
+                    const catClassMap = {
+                        'KING': 'category-king',
+                        'QUEEN': 'category-queen',
+                        'PRINCE': 'category-prince',
+                        'PRINCESS': 'category-princess',
+                        'COUPLE': 'category-couple'
+                    };
+
+                    const card = document.createElement('div');
+                    // use category gradient background, keep rounded corners and prominent shadow to match main page
+                    const bgClass = catClassMap[cat] || '';
+                    card.className = `${bgClass} rounded-lg card-shadow p-4 text-white`;
+                    const header = document.createElement('div');
+                    header.className = 'flex items-center justify-between mb-3';
+                    header.innerHTML = `<h4 class='font-semibold text-white'>${cat}</h4><div class='text-xs text-white/80'>Top ${arr.length}</div>`;
+                    card.appendChild(header);
+
+                    const table = document.createElement('table');
+                    // on gradient background make table text lighter and remove heavy borders
+                    table.className = 'min-w-full text-sm';
+                    table.innerHTML = `<thead class='text-left text-xs text-white/80 uppercase'><tr><th class='py-1'>#</th><th class='py-1'>Candidate</th><th class='py-1'>Votes</th></tr></thead><tbody class='text-sm'></tbody>`;
+                    const tb = table.querySelector('tbody');
+                    arr.forEach((c, idx) => {
+                        const tr = document.createElement('tr');
+                        // lighter row styles on top of gradient
+                        tr.className = (idx%2===0)?'bg-white/10':'bg-white/06';
+                        tr.innerHTML = `<td class='py-2 pr-3 text-white/90'>${idx+1}</td><td class='py-2 pr-3 flex items-center gap-3 text-white'><img src='${c.imageUrl}' class='thumbnail' alt=''/><div><div class='font-medium text-white'>${c.name}</div><div class='text-xs text-white/80'>${c.department || ''}</div></div></td><td class='py-2 pr-3 font-semibold text-white'>${c.votes}</td>`;
+                        tb.appendChild(tr);
+                    });
+                    card.appendChild(table);
+                    container.appendChild(card);
+                });
+
+                viewLive.classList.remove('hidden');
+                viewManage.classList.add('hidden');
+            } catch(err){
+                console.error('Failed to fetch /api/results', err);
+                const fe = document.getElementById('fetchError');
+                fe.textContent = 'Failed to load results from server: ' + (err && err.message ? err.message : err);
+                fe.style.display = '';
+            }
+        }
+
+        // Render Candidates list in management view
+        async function renderCandidatesList(){
+            candidatesTbody.innerHTML = '';
+            try{
+                // fetch candidates per category and aggregate
+                const fetches = (categories || []).map(cat => fetch(`/api/candidates/${encodeURIComponent(cat)}`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } }).then(r => {
+                    if (!r.ok) throw new Error(`Status ${r.status} for category ${cat}`);
+                    return r.json();
+                }).then(arr => ({ category: cat, list: Array.isArray(arr) ? arr : (arr.candidates || []) })));
+
+                const results = await Promise.all(fetches);
+                const flat = [];
+                results.forEach(res => {
+                    const list = res.list || [];
+                    list.forEach(c => {
+                        flat.push({ id: c.id, name: c.name, category: res.category, department: c.department || '', votes: c.voteCount || c.votes || 0, imageUrl: c.imageUrl || '' });
+                    });
+                });
+
+                // cache for edit operations
+                candidatesCache = flat;
+                document.getElementById('fetchError').style.display = 'none';
+
+                flat.forEach((c, i) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class='px-4 py-3'>${i+1}</td>
+                        <td class='px-4 py-3 flex items-center gap-3'><img src='${c.imageUrl || ''}' class='thumbnail' alt=''/><div><div class='font-medium'>${c.name}</div><div class='text-xs text-gray-500'>ID ${c.id}</div></div></td>
+                        <td class='px-4 py-3'>${c.category}</td>
+                        <td class='px-4 py-3'>${c.department || ''}</td>
+                        <td class='px-4 py-3'>${c.votes}</td>
+                        <td class='px-4 py-3'><div class='flex gap-2'><button data-id='${c.id}' class='edit-btn px-3 py-1 rounded border bg-white text-sm'>Edit</button><button data-id='${c.id}' class='del-btn px-3 py-1 rounded border bg-red-50 text-red-600 text-sm'>Delete</button></div></td>
+                    `;
+                    candidatesTbody.appendChild(tr);
+                });
+
+            } catch(err){
+                console.error('Failed to fetch /api/candidates by category', err);
+                const fe = document.getElementById('fetchError');
+                fe.textContent = 'Failed to load candidates from server: ' + (err && err.message ? err.message : err);
+                fe.style.display = '';
+                return;
+            }
+
+            document.querySelectorAll('.edit-btn').forEach(b => b.addEventListener('click', onEditCandidate));
+            document.querySelectorAll('.del-btn').forEach(b => b.addEventListener('click', onDeleteCandidate));
+
+            viewManage.classList.remove('hidden');
+            viewLive.classList.add('hidden');
+        }
+
+        // Refresh both views
+        async function refreshAll(){
+            await renderLiveResults();
+            await renderCandidatesList();
+        }
+
+        // Edit candidate: populate form
+        async function onEditCandidate(e){
+            const id = parseInt(e.currentTarget.dataset.id,10);
+            // find candidate in local cache populated by renderCandidatesList
+            const c = (candidatesCache || []).find(x => String(x.id) === String(id));
+            if (!c) return alert('Candidate not found');
+            candidateIdInput.value = c.id;
+            nameInput.value = c.name;
+            categorySelect.value = c.category;
+            deptInput.value = c.department || '';
+            imagePreview.src = c.imageUrl || '';
+            imageFilename.textContent = '';
+            showView('manage');
+         }
+
+        // Delete candidate
+        async function onDeleteCandidate(e){
+            const id = parseInt(e.currentTarget.dataset.id,10);
+            if (!confirm('Delete candidate #' + id + '?')) return;
+            try{
+                if (window.__USE_MOCK === true || window.location.search.includes('mock=true')){
+                    // mock backend
+                    const res = await fetch(`/api/candidates/${id}`, { method: 'DELETE', credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) throw new Error('Status ' + res.status);
+                    const payload = await res.json();
+                    if (payload && payload.success){
+                        showToast('Deleted');
+                        await refreshAll();
+                    } else {
+                        alert('Delete failed');
+                    }
+                } else {
+                    // real backend: call admin endpoint with adminPin and expect 204 No Content
+                    const res = await fetch(`/api/admin/candidates/${id}?adminPin=${encodeURIComponent(ADMIN_PIN)}`, { method: 'DELETE', credentials: 'same-origin' });
+                    if (res.status === 204 || res.ok) {
+                        showToast('Deleted');
+                        await refreshAll();
+                    } else {
+                        const body = await res.text().catch(()=>null);
+                        throw new Error('Status ' + res.status + (body ? (': ' + body) : ''));
+                    }
+                }
+            } catch(err){
+                console.error('Failed to delete candidate', err);
+                const fe = document.getElementById('fetchError');
+                fe.textContent = 'Failed to delete candidate: ' + (err && err.message ? err.message : err);
+                fe.style.display = '';
+            }
+        }
+
+        // Reset form
+        function resetForm(){
+            candidateIdInput.value = '';
+            nameInput.value = '';
+            categorySelect.value = categories[0];
+            deptInput.value = '';
+            imageInput.value = '';
+            imagePreview.src = '';
+            imageFilename.textContent = '';
+        }
+
+        // Submit create/update
+        async function onSubmitCandidate(ev){
+            ev.preventDefault();
+            const id = candidateIdInput.value ? parseInt(candidateIdInput.value,10) : null;
+            const formData = new FormData();
+            formData.append('name', nameInput.value.trim());
+            formData.append('department', deptInput.value.trim());
+            formData.append('category', categorySelect.value);
+            if (imageInput.files && imageInput.files[0]) formData.append('image', imageInput.files[0]);
+
+            console.group('FormData');
+            for (let pair of formData.entries()) console.log(pair[0], pair[1]);
+            console.groupEnd();
+
+            try{
+                // If mock mode is active we still use the mock endpoints (FormData). Otherwise call admin endpoints with JSON and adminPin.
+                if (window.__USE_MOCK === true || window.location.search.includes('mock=true')){
+                    if (id){
+                        const res = await fetch(`/api/candidates/${id}`, { method: 'PUT', body: formData, credentials: 'same-origin' });
+                        if (!res.ok) throw new Error('Status ' + res.status);
+                        const payload = await res.json();
+                        console.log('PUT response', payload);
+                        showToast('Updated');
+                    } else {
+                        const res = await fetch('/api/candidates', { method: 'POST', body: formData, credentials: 'same-origin' });
+                        if (!res.ok) throw new Error('Status ' + res.status);
+                        const payload = await res.json();
+                        console.log('POST response', payload);
+                        showToast('Created');
+                    }
+                } else {
+                    // Construct JSON payload for real backend admin endpoints
+                    const payloadBody = {
+                        name: nameInput.value.trim(),
+                        department: deptInput.value.trim(),
+                        category: categorySelect.value,
+                        imageUrl: imagePreview.src || null
+                    };
+
+                    if (id){
+                        const res = await fetch(`/api/admin/candidates/${id}?adminPin=${encodeURIComponent(ADMIN_PIN)}`, { method: 'PUT', body: JSON.stringify(payloadBody), credentials: 'same-origin', headers:{ 'Content-Type':'application/json' } });
+                        if (!res.ok) throw new Error('Status ' + res.status);
+                        const payload = await res.json();
+                        console.log('Admin PUT response', payload);
+                        showToast('Updated');
+                    } else {
+                        const res = await fetch(`/api/admin/candidates?adminPin=${encodeURIComponent(ADMIN_PIN)}`, { method: 'POST', body: JSON.stringify(payloadBody), credentials: 'same-origin', headers:{ 'Content-Type':'application/json' } });
+                        if (!res.ok) throw new Error('Status ' + res.status);
+                        const payload = await res.json();
+                        console.log('Admin POST response', payload);
+                        showToast('Created');
+                    }
+                }
+                document.getElementById('fetchError').style.display = 'none';
+            } catch(err){
+                console.error('Failed to submit candidate', err);
+                const fe = document.getElementById('fetchError');
+                fe.textContent = 'Failed to save candidate: ' + (err && err.message ? err.message : err);
+                fe.style.display = '';
+            }
+
+            resetForm();
+            await refreshAll();
+        }
+
+        // Helper to show specific view and update nav button styles
+        function showView(v){
+            if (v === 'live'){
+                btnLive.classList.add('bg-white'); btnLive.classList.remove('bg-indigo-600','text-white');
+                btnManage.classList.add('bg-indigo-600','text-white'); btnManage.classList.remove('bg-white');
+                viewLive.classList.remove('hidden'); viewManage.classList.add('hidden');
+            } else {
+                btnManage.classList.add('bg-indigo-600','text-white'); btnManage.classList.remove('bg-white');
+                btnLive.classList.remove('bg-indigo-600','text-white'); btnLive.classList.add('bg-white');
+                viewManage.classList.remove('hidden'); viewLive.classList.add('hidden');
+            }
+        }
+
+        // initialize
+        init();
+
+    })();
+
+</script>
+
 </body>
 
 </html>
