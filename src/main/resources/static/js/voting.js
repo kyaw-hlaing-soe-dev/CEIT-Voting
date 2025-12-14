@@ -20,39 +20,62 @@
   };
   const capitalize = (s = '') => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
-  // device id + pin storage
-  const getDeviceId = () => {
-    let id = localStorage.getItem('deviceId');
-    if (!id) {
-      id = 'dev-' + Math.random().toString(36).slice(2);
-      localStorage.setItem('deviceId', id);
+  // --- Device ID + Pin Storage ---
+  // Use advanced fingerprinting for unique device identification
+  const getDeviceId = async () => {
+    // Try to use advanced fingerprinting if available
+    if (window.DeviceFingerprint) {
+      try {
+        const fingerprint = await window.DeviceFingerprint.get();
+        localStorage.setItem('deviceId', fingerprint);
+        return fingerprint;
+      } catch (e) {
+        console.warn('Fingerprint generation failed, using fallback:', e);
+      }
     }
-    return id;
+    // Fallback to stored or random ID
+    let deviceId = localStorage.getItem('deviceId');
+    if (!deviceId) {
+      deviceId = 'dev-' + Math.random().toString(36).slice(2);
+      localStorage.setItem('deviceId', deviceId);
+    }
+    return deviceId;
   };
-  const savePin = (pin) => localStorage.setItem('userPin', pin);
-  const getStoredPin = () => localStorage.getItem('userPin');
 
-  // selection storage keys
-  const selectionValueKey = (category) => `sel:${category}:num`;
+  // Synchronous version for compatibility
+  const getDeviceIdSync = () => {
+    return localStorage.getItem('deviceId') || 'dev-' + Math.random().toString(36).slice(2);
+  };
+
+  const getStoredPin = () => localStorage.getItem('votingPin');
+  const savePin = (pin) => localStorage.setItem('votingPin', pin);
+
+  const selectionValueKey = (category) => `sel:${category}`;
   const selectedObjectKey = (category) => `sel:${category}:obj`;
+  
   const saveSelection = (category, obj) => {
     localStorage.setItem(selectionValueKey(category), String(obj?.candidateNumber || ''));
     localStorage.setItem(selectedObjectKey(category), JSON.stringify(obj || {}));
   };
+  
   const loadSelection = (category) => {
     const obj = localStorage.getItem(selectedObjectKey(category));
     if (obj) {
-      try { return JSON.parse(obj); } catch(_) {}
+      try {
+        return JSON.parse(obj);
+      } catch (e) {
+        return null;
+      }
     }
-    const num = localStorage.getItem(selectionValueKey(category));
-    if (num) return { candidateNumber: parseInt(num, 10) };
     return null;
   };
-  const clearSelections = () =>
-  CATEGORIES.forEach(c => {
-    localStorage.removeItem(selectionValueKey(c));
-    localStorage.removeItem(selectedObjectKey(c));
-  });
+  
+  const clearSelections = () => {
+    CATEGORIES.forEach(c => {
+      localStorage.removeItem(selectionValueKey(c));
+      localStorage.removeItem(selectedObjectKey(c));
+    });
+  };
 
   // --- Skeleton helpers ---
   const pageSkeletons = new Set();
@@ -124,10 +147,23 @@
 
   // --- API helpers ---
   const verifyPin = async (pin) => {
+    // Get device fingerprint before sending request
+    let fingerprint = null;
+    if (window.DeviceFingerprint) {
+      try {
+        fingerprint = await window.DeviceFingerprint.get();
+      } catch (e) {
+        console.warn('Failed to generate fingerprint:', e);
+      }
+    }
+
     const res = await fetch(`${API_BASE}/auth/verify-pin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ 
+        pin,
+        fingerprint: fingerprint // Send fingerprint to server
+      }),
     });
 
     // Handle rate limiting
@@ -141,22 +177,39 @@
       try {
         const data = await res.json();
         const remaining = data.remainingAttempts;
-        if (remaining !== undefined && remaining <= 3) {
-          return { valid: false, alreadyVoted: false, remainingAttempts: remaining };
-        }
-      } catch (e) {}
-      return { valid: false, alreadyVoted: false };
+        return { valid: false, remainingAttempts: remaining };
+      } catch (e) {
+        return { valid: false };
+      }
     }
 
-    if (!res.ok) throw new Error(await res.text() || 'Unable to verify PIN');
+    if (!res.ok) {
+      throw new Error('Failed to verify PIN');
+    }
+
     return res.json();
   };
 
   // Check device voting status
   const checkDeviceStatus = async () => {
     try {
-      const res = await fetch(`${API_BASE}/auth/check-device`);
-      if (!res.ok) return { hasVoted: false };
+      // Get fingerprint for device check
+      let fingerprint = null;
+      if (window.DeviceFingerprint) {
+        try {
+          fingerprint = await window.DeviceFingerprint.get();
+        } catch (e) {}
+      }
+
+      const res = await fetch(`${API_BASE}/auth/check-device`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint })
+      });
+
+      if (!res.ok) {
+        return { hasVoted: false };
+      }
       return res.json();
     } catch (e) {
       return { hasVoted: false };
@@ -171,10 +224,49 @@
   };
 
   const submitVotes = async ({ pin, deviceId, votes }) => {
+    // Get all device identification data for multi-factor verification
+    let fingerprint = null;
+    let hardwareHash = null;
+    let screenInfo = null;
+
+    if (window.DeviceFingerprint) {
+      try {
+        // Get all device data at once
+        const deviceData = await window.DeviceFingerprint.getDeviceData();
+        fingerprint = deviceData.fingerprint;
+        hardwareHash = deviceData.hardwareHash;
+        screenInfo = deviceData.screenInfo;
+      } catch (e) {
+        console.warn('Device fingerprinting failed:', e);
+        // Try individual methods as fallback
+        try {
+          fingerprint = await window.DeviceFingerprint.get();
+        } catch (e2) {}
+        try {
+          hardwareHash = await window.DeviceFingerprint.getHardwareHash();
+        } catch (e3) {}
+        try {
+          screenInfo = window.DeviceFingerprint.getScreenInfo();
+        } catch (e4) {}
+      }
+    }
+
+    // Ensure we have a valid deviceId
+    const finalDeviceId = fingerprint || deviceId || ('dev-' + Math.random().toString(36).slice(2));
+
+    const requestBody = {
+      pin,
+      deviceId: finalDeviceId,
+      fingerprint: fingerprint,
+      hardwareHash: hardwareHash,
+      screenInfo: screenInfo,
+      votes: votes
+    };
+
     const res = await fetch(`${API_BASE}/voting/bulk-vote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin, deviceId, votes }),
+      body: JSON.stringify(requestBody),
     });
 
     const contentType = res.headers.get('content-type') || '';
@@ -186,18 +278,44 @@
       const msg = body && body.message ? body.message : (body || 'Vote submission failed.');
       throw new Error(msg);
     }
+
     return body;
   };
 
-  // --- RESPONSIVE CSS (FORCE ALWAYS 5 COLUMNS) ---
+  // --- Inject CSS styles ---
   function injectStyles() {
-    if (document.head.querySelector(`#${STYLE_ID}`)) return;
+    if (document.getElementById(STYLE_ID)) return;
 
     const css = `
       .radio-grid {
-        display: grid !important;
-        grid-template-columns: repeat(5, 1fr) !important;
+        display: grid;
         gap: 12px;
+        justify-items: center;
+      }
+      .radio-option {
+        background: #f8f8f8;
+        border: 2px solid #ddd;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .radio-option:hover {
+        border-color: #3b82f6;
+        background: #eff6ff;
+      }
+      .radio-option.selected {
+        border-color: #3b82f6;
+        background: #dbeafe;
+      }
+      .radio-option .number {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #1e3a8a;
         padding: 8px;
       }
       .radio-label {
@@ -322,7 +440,7 @@
       candidates = await fetchCandidates(category);
     } catch (err) {
       if (container)
-      container.innerHTML = `<p class="text-red-600 text-center">${err.message}</p>`;
+        container.innerHTML = `<p class="text-red-600 text-center">${err.message}</p>`;
       if (nextBtn) {
         nextBtn.disabled = true;
         nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -334,7 +452,7 @@
 
     if (!Array.isArray(candidates) || candidates.length === 0) {
       if (container)
-      container.innerHTML = `<p class="text-gray-700 text-center">No candidates available.</p>`;
+        container.innerHTML = `<p class="text-gray-700 text-center">No candidates available.</p>`;
       if (nextBtn) {
         nextBtn.disabled = true;
         nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -345,9 +463,9 @@
     let selectedNumber = loadSelection(category)?.candidateNumber || null;
 
     const placeholderImage = (candidate) =>
-    candidate?.imageUrl?.trim()
-      ? candidate.imageUrl
-      : 'https://placehold.co/300x400/f3f4f6/1e3a8a?text=Candidate';
+      candidate?.imageUrl?.trim()
+        ? candidate.imageUrl
+        : 'https://placehold.co/300x400/f3f4f6/1e3a8a?text=Candidate';
 
     const updateCandidateDisplay = (candidate) => {
       if (!candidate) return;
@@ -355,7 +473,7 @@
       if (candidateNumber) candidateNumber.textContent = `No ${candidate.candidateNumber}`;
       if (candidateName) candidateName.textContent = candidate.name || '';
       if (candidateDepartment)
-      candidateDepartment.textContent = candidate.department || '';
+        candidateDepartment.textContent = candidate.department || '';
     };
 
     const updateNextButton = () => {
@@ -453,14 +571,14 @@
     }
 
     if (prevBtn && prevUrl)
-    prevBtn.addEventListener('click', () => (window.location.href = prevUrl));
+      prevBtn.addEventListener('click', () => (window.location.href = prevUrl));
 
     document.querySelectorAll('[data-close-modal]').forEach((btn) =>
-    btn.addEventListener('click', () => {
-      const id = btn.getAttribute('data-close-modal');
-      const m = document.getElementById(id);
-      if (m) m.classList.add('hidden');
-    })
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-close-modal');
+        const m = document.getElementById(id);
+        if (m) m.classList.add('hidden');
+      })
     );
   }
 
@@ -471,7 +589,7 @@
   }
 
   if (document.readyState === 'loading')
-  document.addEventListener('DOMContentLoaded', initAuto);
+    document.addEventListener('DOMContentLoaded', initAuto);
   else initAuto();
 
   // --- Load all selections for summary page ---
@@ -487,6 +605,7 @@
     API_BASE,
     CATEGORIES,
     getDeviceId,
+    getDeviceIdSync,
     getStoredPin,
     savePin,
     verifyPin,
@@ -503,3 +622,4 @@
     playRadioFeedback,
   });
 })();
+

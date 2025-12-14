@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vote Summary</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" th:href="@{/images/logo.png}">
+    <link rel="icon" type="image/png" sizes="16x16" th:href="@{/images/logo.png}">
+    <link rel="shortcut icon" th:href="@{/images/logo.png}">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" th:href="@{/styles.css}">
     <style>
@@ -247,9 +253,15 @@
         </div>
     </div>
 
+    <script src="/js/fingerprint.js"></script>
     <script th:src="@{/js/voting.js}"></script>
     <script th:inline="javascript">
         function loadSelections() {
+            // Check if VotingApp is available
+            if (typeof VotingApp === 'undefined' || !VotingApp.loadSelectionsForSummary) {
+                console.error('VotingApp not loaded properly');
+                return;
+            }
             // Load selections using VotingApp's new storage keys
             const selections = VotingApp.loadSelectionsForSummary();
 
@@ -276,6 +288,12 @@
         }
 
         async function handleConfirm() {
+            // Check if VotingApp is available
+            if (typeof VotingApp === 'undefined') {
+                alert('Application not loaded properly. Please refresh the page.');
+                return;
+            }
+
             const confirmBtn = document.querySelector('button[onclick="handleConfirm()"]');
             const backBtn = document.querySelector('button[onclick="handleClose()"]');
             
@@ -300,7 +318,7 @@
                 }
 
                 // Always reuse persisted device ID; create once if missing
-                const deviceId = VotingApp.getDeviceId();
+                const deviceId = await VotingApp.getDeviceId();
 
                 // Load all selections
                 const selections = VotingApp.loadSelectionsForSummary();
@@ -356,7 +374,9 @@
         }
 
         // Load selections on page load
-        loadSelections();
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSelections();
+        });
     </script>
 </body>
 </html>

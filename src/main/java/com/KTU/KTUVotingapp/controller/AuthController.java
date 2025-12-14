@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
-import java.util.UUID;
 
 import com.KTU.KTUVotingapp.service.RateLimitService;
 import com.KTU.KTUVotingapp.service.VotingService;
@@ -57,10 +56,10 @@ public class AuthController {
 
         String pin = String.valueOf(body.get("pin")).trim();
 
-        // Get or create device ID from cookie or IP hash
-        String deviceId = getOrCreateDeviceId(request, response);
-
-        // Check if this device has already voted
+        // Get device ID - prefer client fingerprint, fallback to server-generated
+        String clientFingerprint = body.get("fingerprint") != null ?
+            String.valueOf(body.get("fingerprint")).trim() : null;
+        String deviceId = getOrCreateDeviceId(request, response, clientFingerprint);
         boolean deviceAlreadyVoted = votingService.deviceHasVoted(deviceId);
 
         if (pin.equals(userPin)) {
@@ -102,11 +101,16 @@ public class AuthController {
     }
 
     /**
-     * Check if current device has already voted
+     * Check if current device has already voted (POST version)
+     * Accepts fingerprint from client for more accurate device identification
      */
-    @GetMapping("/check-device")
-    public ResponseEntity<?> checkDevice(HttpServletRequest request, HttpServletResponse response) {
-        String deviceId = getOrCreateDeviceId(request, response);
+    @PostMapping("/check-device")
+    public ResponseEntity<?> checkDevice(@RequestBody(required = false) Map<String, Object> body,
+                                         HttpServletRequest request,
+                                         HttpServletResponse response) {
+        String clientFingerprint = (body != null && body.get("fingerprint") != null) ?
+            String.valueOf(body.get("fingerprint")).trim() : null;
+        String deviceId = getOrCreateDeviceId(request, response, clientFingerprint);
         boolean hasVoted = votingService.deviceHasVoted(deviceId);
         return ResponseEntity.ok(Map.of(
             "deviceId", deviceId,
@@ -115,49 +119,59 @@ public class AuthController {
     }
 
     /**
-     * Get or create a persistent device ID using IP-only hash.
-     * This ensures the same device ID across all browsers and incognito modes.
-     *
-     * IMPORTANT: Uses IP-only (not User-Agent) to prevent voting from:
-     * - Different browsers on the same device
-     * - Incognito/private browsing mode
-     * - Clearing cookies
+     * Legacy GET endpoint for backward compatibility
      */
-    private String getOrCreateDeviceId(HttpServletRequest request, HttpServletResponse response) {
-        // Always use IP-only based ID for consistency across browsers/incognito
-        String ipOnlyId = deriveIpOnlyId(request);
+    @GetMapping("/check-device")
+    public ResponseEntity<?> checkDeviceGet(HttpServletRequest request, HttpServletResponse response) {
+        String deviceId = getOrCreateDeviceId(request, response, null);
+        boolean hasVoted = votingService.deviceHasVoted(deviceId);
+        return ResponseEntity.ok(Map.of(
+            "deviceId", deviceId,
+            "hasVoted", hasVoted
+        ));
+    }
 
-        // Still set cookie for faster lookups on subsequent requests
-        Cookie deviceCookie = new Cookie("voting_device_id", ipOnlyId);
+    /**
+     * Get or create a persistent device ID using fingerprint or IP-based hash.
+     * Priority:
+     * 1. Client-generated fingerprint (most reliable, hardware-based)
+     * 2. Server-generated IP + User-Agent hash (fallback)
+     *
+     * IMPORTANT: Client fingerprint uses canvas, WebGL, audio, screen info
+     * which are hardware-based and persist across:
+     * - Different browsers on the same device
+     * - Incognito/Private browsing mode
+     * - VPN usage (fingerprint stays same even with different IP)
+     */
+    private String getOrCreateDeviceId(HttpServletRequest request, HttpServletResponse response, String clientFingerprint) {
+        String deviceId;
+
+        // Prefer client-generated fingerprint (most reliable)
+        if (clientFingerprint != null && !clientFingerprint.isBlank() && clientFingerprint.startsWith("fp-")) {
+            deviceId = clientFingerprint;
+        } else {
+            // Fallback to server-generated IP + User-Agent based ID
+            deviceId = deriveIpUserAgentId(request);
+        }
+
+        // Set cookie for faster lookups on subsequent requests
+        Cookie deviceCookie = new Cookie("voting_device_id", deviceId);
         deviceCookie.setMaxAge(365 * 24 * 60 * 60); // 1 year
         deviceCookie.setPath("/");
         deviceCookie.setHttpOnly(true);
         deviceCookie.setSecure(request.isSecure());
         response.addCookie(deviceCookie);
 
-        return ipOnlyId;
-    }
-
-    private String getCookieValue(HttpServletRequest request, String cookieName) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies != null) {
-            for (Cookie cookie : cookies) {
-                if (cookieName.equals(cookie.getName())) {
-                    return cookie.getValue();
-                }
-            }
-        }
-        return null;
+        return deviceId;
     }
 
     /**
-     * Derive device ID from IP address only.
-     * This ensures same ID for all browsers/incognito on same network.
+     * Derive device ID from IP and User-Agent hash
      */
-    private String deriveIpOnlyId(HttpServletRequest request) {
+    private String deriveIpUserAgentId(HttpServletRequest request) {
         String ip = getClientIpAddress(request);
-        // Use only IP address - consistent across all browsers on same device/network
-        String source = (ip == null ? "unknown" : ip);
+        String userAgent = getUserAgent(request);
+        String source = (ip == null ? "unknown" : ip) + "|" + (userAgent == null ? "unknown" : userAgent);
 
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -166,11 +180,24 @@ public class AuthController {
             for (int i = 0; i < 16; i++) {
                 sb.append(String.format("%02x", hash[i]));
             }
-            return "ip-" + sb;
+            return "dev-" + sb;
         } catch (NoSuchAlgorithmException e) {
             // Fallback: use IP directly with prefix
-            return "ip-" + source.replace(".", "-").replace(":", "-");
+            return "dev-" + ip.replace(".", "-").replace(":", "-");
         }
+    }
+
+    /**
+     * Get User-Agent header from request for device fingerprinting.
+     * Normalizes the User-Agent to reduce minor variations.
+     */
+    private String getUserAgent(HttpServletRequest request) {
+        String userAgent = request.getHeader("User-Agent");
+        if (userAgent == null || userAgent.isBlank()) {
+            return "unknown";
+        }
+        // Normalize: trim and lowercase for consistency
+        return userAgent.trim();
     }
 
     /**
@@ -200,3 +227,4 @@ public class AuthController {
         return request.getRemoteAddr();
     }
 }
+

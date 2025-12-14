@@ -5,8 +5,8 @@ services:
     image: postgres:15-alpine
     container_name: ktuvoting-postgres
     environment:
-      - POSTGRES_USER=ktuvote_user
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me}
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kkkkk11111}
       - POSTGRES_DB=ktuvoting
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     volumes:
@@ -15,7 +15,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ktuvote_user -d ktuvoting"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ktuvoting"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -62,8 +62,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/ktuvoting
-      - SPRING_DATASOURCE_USERNAME=ktuvote_user
-      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-change_me}
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-kkkkk11111}
       - ADMIN_PIN=${ADMIN_PIN:-99999}
       - JAVA_OPTS=-XX:+UseG1GC -Xms2g -Xmx4g -XX:MaxGCPauseMillis=200
     depends_on:

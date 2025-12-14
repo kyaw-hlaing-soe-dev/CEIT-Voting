@@ -17,6 +17,8 @@ public interface VoterRepository extends JpaRepository<Voter, Long> {
 
     Optional<Voter> findByDeviceId(String deviceId);
 
+    Optional<Voter> findByIpAddress(String ipAddress);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT v FROM Voter v WHERE v.deviceId = :deviceId")
     Optional<Voter> findByDeviceIdWithLock(@Param("deviceId") String deviceId);
@@ -28,6 +30,29 @@ public interface VoterRepository extends JpaRepository<Voter, Long> {
     boolean existsByDeviceId(String deviceId);
 
     boolean existsByPin(String pin);
+
+    boolean existsByIpAddressAndHasVotedTrue(String ipAddress);
+
+    @Query("SELECT v FROM Voter v WHERE v.ipAddress = :ipAddress AND v.hasVoted = true")
+    Optional<Voter> findByIpAddressAndHasVoted(@Param("ipAddress") String ipAddress);
+
+    // Hardware hash methods for cross-browser device identification
+    boolean existsByHardwareHashAndHasVotedTrue(String hardwareHash);
+
+    @Query("SELECT v FROM Voter v WHERE v.hardwareHash = :hardwareHash AND v.hasVoted = true")
+    Optional<Voter> findByHardwareHashAndHasVoted(@Param("hardwareHash") String hardwareHash);
+
+    // Screen info methods (screen resolution is same across browsers on same device)
+    @Query("SELECT v FROM Voter v WHERE v.screenInfo = :screenInfo AND v.ipAddress = :ipAddress AND v.hasVoted = true")
+    Optional<Voter> findByScreenInfoAndIpAddressAndHasVoted(
+        @Param("screenInfo") String screenInfo,
+        @Param("ipAddress") String ipAddress);
+
+    // Combined fingerprint check
+    @Query("SELECT v FROM Voter v WHERE v.fingerprint = :fingerprint AND v.hasVoted = true")
+    Optional<Voter> findByFingerprintAndHasVoted(@Param("fingerprint") String fingerprint);
+
+    boolean existsByFingerprintAndHasVotedTrue(String fingerprint);
 }
 
 

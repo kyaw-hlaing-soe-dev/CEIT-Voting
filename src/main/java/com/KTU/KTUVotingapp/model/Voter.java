@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
     indexes = {
         @Index(name = "idx_pin", columnList = "pin"),
         @Index(name = "idx_has_voted", columnList = "has_voted"),
-        @Index(name = "idx_device_id", columnList = "device_id")
+        @Index(name = "idx_device_id", columnList = "device_id"),
+        @Index(name = "idx_ip_address", columnList = "ip_address"),
+        @Index(name = "idx_hardware_hash", columnList = "hardware_hash")
     },
     uniqueConstraints = {
         @UniqueConstraint(name = "uk_device_id", columnNames = "device_id")
@@ -26,6 +28,21 @@ public class Voter {
 
     @Column(name = "device_id", nullable = false, length = 255, unique = true)
     private String deviceId;
+
+    @Column(name = "user_agent", length = 512)
+    private String userAgent;
+
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
+
+    @Column(name = "fingerprint", length = 512)
+    private String fingerprint;
+
+    @Column(name = "hardware_hash", length = 128)
+    private String hardwareHash;
+
+    @Column(name = "screen_info", length = 100)
+    private String screenInfo;
 
     @Column(name = "has_voted", nullable = false)
     private boolean hasVoted = false;
@@ -64,6 +81,46 @@ public class Voter {
         this.deviceId = deviceId;
     }
 
+    public String getUserAgent() {
+        return userAgent;
+    }
+
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
+    }
+
+    public String getIpAddress() {
+        return ipAddress;
+    }
+
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+
+    public String getFingerprint() {
+        return fingerprint;
+    }
+
+    public void setFingerprint(String fingerprint) {
+        this.fingerprint = fingerprint;
+    }
+
+    public String getHardwareHash() {
+        return hardwareHash;
+    }
+
+    public void setHardwareHash(String hardwareHash) {
+        this.hardwareHash = hardwareHash;
+    }
+
+    public String getScreenInfo() {
+        return screenInfo;
+    }
+
+    public void setScreenInfo(String screenInfo) {
+        this.screenInfo = screenInfo;
+    }
+
     public boolean isHasVoted() {
         return hasVoted;
     }
@@ -84,5 +141,3 @@ public class Voter {
         this.votedAt = votedAt;
     }
 }
-
-

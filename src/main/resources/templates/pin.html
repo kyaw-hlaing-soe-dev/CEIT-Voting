@@ -12,6 +12,11 @@
 
     <meta name="api-base" content="/api">
 
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" th:href="@{/images/logo.png}">
+    <link rel="icon" type="image/png" sizes="16x16" th:href="@{/images/logo.png}">
+    <link rel="shortcut icon" th:href="@{/images/logo.png}">
+
     <script src="https://cdn.tailwindcss.com"></script>
 
     <link rel="stylesheet" th:href="@{/styles.css}">
@@ -215,6 +220,7 @@
     </div>
 </div>
 
+<script src="/js/fingerprint.js"></script>
 <script src="/js/voting.js"></script>
 <script>
     const pinInputs = ['pin1', 'pin2', 'pin3', 'pin4', 'pin5'].map(id => document.getElementById(id));
@@ -304,6 +310,10 @@
     }));
 
     async function handleContinue() {
+        if (typeof VotingApp === 'undefined') {
+            showError('Application not loaded properly. Please refresh the page.');
+            return;
+        }
         const pin = getEnteredPin();
         if (pin.length !== 5) {
             showError('Please enter your 5-digit PIN.');
@@ -346,6 +356,10 @@
 
     // Check if device already voted on page load
     async function checkDeviceStatus() {
+        if (typeof VotingApp === 'undefined' || !VotingApp.checkDeviceStatus) {
+            console.log('VotingApp not available for device status check');
+            return;
+        }
         try {
             const data = await VotingApp.checkDeviceStatus();
             if (data.hasVoted) {

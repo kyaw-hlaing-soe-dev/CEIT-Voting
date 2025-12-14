@@ -14,10 +14,13 @@
 -- Voters: tracks PIN/device binding and voting status
 -- PIN can be shared across multiple devices (one PIN for all users)
 -- Device ID is unique to prevent duplicate votes from same device
+-- Fingerprint is client-side hardware fingerprint for robust device identification
 CREATE TABLE IF NOT EXISTS voters (
     id           BIGSERIAL PRIMARY KEY,
     pin          VARCHAR(5)  NOT NULL,
     device_id    VARCHAR(255) NOT NULL UNIQUE,
+    user_agent   VARCHAR(512),
+    fingerprint  VARCHAR(64),
     has_voted    BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at   TIMESTAMP    NOT NULL DEFAULT NOW(),
     voted_at     TIMESTAMP
@@ -27,7 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_has_voted ON voters(has_voted);
 CREATE INDEX IF NOT EXISTS idx_device_id ON voters(device_id);
 
 -- Candidates: contestants grouped by category
-CREATE TABLE IF NOT EXISTS candidates (
+CREATE INDEX IF NOT EXISTS idx_fingerprint ON voters(fingerprint);
     id               BIGSERIAL PRIMARY KEY,
     category         VARCHAR(20)  NOT NULL,
     candidate_number INTEGER      NOT NULL,

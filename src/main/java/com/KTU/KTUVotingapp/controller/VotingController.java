@@ -10,8 +10,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -39,6 +43,10 @@ public class VotingController {
             if (resolvedDeviceId != null && !resolvedDeviceId.isBlank()) {
                 request.setDeviceId(resolvedDeviceId);
             }
+            // Set User-Agent and IP for tracking
+            request.setUserAgent(getUserAgent(httpRequest));
+            request.setIpAddress(getClientIpAddress(httpRequest));
+
             votingService.submitVote(request);
             return ResponseEntity.ok(new VoteResponse(true, "Vote submitted successfully"));
         } catch (ResponseStatusException e) {
@@ -62,6 +70,10 @@ public class VotingController {
             if (resolvedDeviceId != null && !resolvedDeviceId.isBlank()) {
                 request.setDeviceId(resolvedDeviceId);
             }
+            // Set User-Agent and IP for tracking
+            request.setUserAgent(getUserAgent(httpRequest));
+            request.setIpAddress(getClientIpAddress(httpRequest));
+
             votingService.submitBulkVotes(request);
             return ResponseEntity.ok(new VoteResponse(true, "All votes submitted successfully"));
         } catch (ResponseStatusException e) {
@@ -101,24 +113,40 @@ public class VotingController {
     }
 
     /**
-     * Resolve device ID using IP-only hash.
-     * This ensures same ID across all browsers and incognito mode.
+     * Check if an IP address has already voted.
+     * GET /api/voting/ip-has-voted?ip=... or auto-detect from request
      */
-    private String resolveDeviceId(HttpServletRequest request) {
-        // Always use IP-only based ID for consistency
-        return deriveIpOnlyId(request);
+    @GetMapping("/ip-has-voted")
+    public ResponseEntity<Boolean> ipHasVoted(
+            @RequestParam(required = false) String ip,
+            HttpServletRequest httpRequest) {
+        String ipToCheck = (ip != null && !ip.isBlank()) ? ip : getClientIpAddress(httpRequest);
+        boolean hasVoted = votingService.ipHasVoted(ipToCheck);
+        return ResponseEntity.ok(hasVoted);
     }
 
     /**
-     * Derive device ID from IP address only.
-     * Consistent across all browsers/incognito on same network.
+     * Resolve device ID using IP + User-Agent hash.
+     * This helps identify unique devices even on the same network.
      */
-    private String deriveIpOnlyId(HttpServletRequest request) {
+    private String resolveDeviceId(HttpServletRequest request) {
+        // Use IP + User-Agent based ID for better device fingerprinting
+        return deriveDeviceId(request);
+    }
+
+    /**
+     * Derive device ID from IP address and User-Agent.
+     * This helps distinguish different devices on the same network.
+     */
+    private String deriveDeviceId(HttpServletRequest request) {
         if (request == null) {
             return null;
         }
         String ip = getClientIpAddress(request);
-        String source = (ip == null ? "unknown" : ip);
+        String userAgent = getUserAgent(request);
+
+        // Combine IP and User-Agent for better device fingerprinting
+        String source = (ip == null ? "unknown" : ip) + "|" + (userAgent == null ? "unknown" : userAgent);
 
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -127,10 +155,21 @@ public class VotingController {
             for (int i = 0; i < 16; i++) {
                 sb.append(String.format("%02x", hash[i]));
             }
-            return "ip-" + sb;
+            return "dev-" + sb;
         } catch (NoSuchAlgorithmException e) {
-            return "ip-" + ip.replace(".", "-").replace(":", "-");
+            return "dev-" + ip.replace(".", "-").replace(":", "-");
         }
+    }
+
+    /**
+     * Get User-Agent header from request for device fingerprinting.
+     */
+    private String getUserAgent(HttpServletRequest request) {
+        String userAgent = request.getHeader("User-Agent");
+        if (userAgent == null || userAgent.isBlank()) {
+            return "unknown";
+        }
+        return userAgent.trim();
     }
 
     private String getClientIpAddress(HttpServletRequest request) {
@@ -152,6 +191,32 @@ public class VotingController {
         }
 
         return request.getRemoteAddr();
+    }
+
+    /**
+     * Handle validation errors and return detailed error messages.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<VoteResponse> handleValidationException(MethodArgumentNotValidException ex) {
+        String errors = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .collect(Collectors.joining(", "));
+        return ResponseEntity.badRequest()
+                .body(new VoteResponse(false, "Validation failed: " + errors));
+    }
+
+    /**
+     * Handle JSON parsing errors (e.g., invalid enum values).
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<VoteResponse> handleJsonParseException(HttpMessageNotReadableException ex) {
+        String message = "Invalid request format";
+        Throwable cause = ex.getCause();
+        if (cause != null && cause.getMessage() != null) {
+            message = cause.getMessage();
+        }
+        return ResponseEntity.badRequest()
+                .body(new VoteResponse(false, message));
     }
 }
 

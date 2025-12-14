@@ -15,6 +15,13 @@ public class BulkVoteRequest {
     @NotBlank(message = "PIN is required")
     private String pin;
 
+    // For device fingerprinting and auditing
+    private String userAgent;
+    private String ipAddress;
+    private String fingerprint;
+    private String hardwareHash;
+    private String screenInfo;
+
     @NotEmpty(message = "At least one vote is required")
     @Valid
     private List<VoteItem> votes;
@@ -36,6 +43,46 @@ public class BulkVoteRequest {
 
     public void setPin(String pin) {
         this.pin = pin;
+    }
+
+    public String getUserAgent() {
+        return userAgent;
+    }
+
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
+    }
+
+    public String getIpAddress() {
+        return ipAddress;
+    }
+
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+
+    public String getFingerprint() {
+        return fingerprint;
+    }
+
+    public void setFingerprint(String fingerprint) {
+        this.fingerprint = fingerprint;
+    }
+
+    public String getHardwareHash() {
+        return hardwareHash;
+    }
+
+    public void setHardwareHash(String hardwareHash) {
+        this.hardwareHash = hardwareHash;
+    }
+
+    public String getScreenInfo() {
+        return screenInfo;
+    }
+
+    public void setScreenInfo(String screenInfo) {
+        this.screenInfo = screenInfo;
     }
 
     public List<VoteItem> getVotes() {
