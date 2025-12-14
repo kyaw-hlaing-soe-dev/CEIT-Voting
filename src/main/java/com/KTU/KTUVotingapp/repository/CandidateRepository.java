@@ -34,4 +34,16 @@ public interface CandidateRepository extends JpaRepository<Candidate, Long> {
     // Existence check across categories while excluding a candidate id (useful for updates)
     @Query("SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Candidate c WHERE c.category IN :cats AND c.candidateNumber = :number AND (:excludeId IS NULL OR c.id <> :excludeId)")
     boolean existsByCategoryInAndCandidateNumberExcludingId(@Param("cats") Iterable<Category> cats, @Param("number") Integer number, @Param("excludeId") Long excludeId);
+
+    // New: reset all vote counts to zero
+    @Modifying
+    @Transactional
+    @Query("UPDATE Candidate c SET c.voteCount = 0")
+    int resetAllVoteCounts();
+
+    // New: reset vote counts for a single category
+    @Modifying
+    @Transactional
+    @Query("UPDATE Candidate c SET c.voteCount = 0 WHERE c.category = :category")
+    int resetVoteCountsByCategory(@Param("category") Category category);
 }

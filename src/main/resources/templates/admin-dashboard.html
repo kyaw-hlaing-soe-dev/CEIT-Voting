@@ -38,6 +38,8 @@
                 <div id="modeBadge" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">Mode</div>
                 <button id="btn-live" class="px-4 py-2 rounded bg-white border border-gray-200">Live Results</button>
                 <button id="btn-manage" class="px-4 py-2 rounded bg-indigo-600 text-white">Candidate Management</button>
+                <button id="btn-reset-votes" class="px-4 py-2 rounded bg-red-50 text-red-600 border border-red-200">Reset votes</button>
+                <button id="btn-view-audit" class="px-4 py-2 rounded bg-yellow-50 text-yellow-800 border border-yellow-200">View Audit</button>
                 <button id="manualRefreshBtn" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Refresh Now</button>
             </div>
         </div>
@@ -75,11 +77,6 @@
                                     <select id="candidate-category" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm p-2" required>
                                         <!-- options injected -->
                                     </select>
-                                </div>
-
-                                <div>
-                                    <label for="candidate-number" class="block text-sm font-medium text-gray-700">Rank (Number)</label>
-                                    <input id="candidate-number" type="number" min="1" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm p-2" required />
                                 </div>
 
                                 <div>
@@ -274,6 +271,16 @@
                 return { ok:true, status:200, json: async ()=> ({ success:true }) };
             }
 
+            // Mock admin audit endpoint
+            if (url.endsWith('/api/admin/audit') && method === 'GET'){
+                await delay(40);
+                const sample = [
+                    { id:1, action:'RESET_ALL_VOTES', details:'Reset all candidate vote counts to 0. Rows affected: 12', performedBy:'admin', performedAt: new Date().toISOString() },
+                    { id:2, action:'RESET_VOTES_BY_CATEGORY', details:'Reset votes for category KING. Rows affected: 3', performedBy:'alice', performedAt: new Date().toISOString() }
+                ];
+                return { ok:true, status:200, json: async ()=> sample };
+            }
+
             // fallback
             return nativeFetch(input, init);
         };
@@ -335,7 +342,7 @@
 
             populateCategorySelect();
             attachEvents();
-            // Show mock/live mode in header badge
+            // If a refresh requested the live view, honor it after attaching events
             try {
                 const modeBadge = document.getElementById('modeBadge');
                 const isMock = (window.__USE_MOCK === true) || window.location.search.includes('mock=true');
@@ -350,7 +357,15 @@
 
             // Immediately refresh and show the default view
             await refreshAll();
-            showView('live');
+            // If a refresh requested the live view, show it; otherwise keep default (live)
+            const forced = sessionStorage.getItem('adminOpenView');
+            if (forced === 'live') {
+                showView('live');
+                sessionStorage.removeItem('adminOpenView');
+            } else {
+                // default to live
+                showView('live');
+            }
         }
 
         // cache of loaded candidates (flat list) to support edit flow
@@ -364,10 +379,106 @@
         function attachEvents(){
             btnLive.addEventListener('click', ()=> showView('live'));
             btnManage.addEventListener('click', ()=> showView('manage'));
-            manualRefreshBtn.addEventListener('click', async ()=>{ await refreshAll(); showToast('Refreshed'); });
+            manualRefreshBtn.addEventListener('click', ()=> {
+                // Force showing the Live Results page after reload
+                try { sessionStorage.setItem('adminOpenView', 'live'); } catch(e) {}
+                window.location.reload();
+            });
+            const btnResetVotes = document.getElementById('btn-reset-votes');
+            if (btnResetVotes) btnResetVotes.addEventListener('click', onResetVotesClicked);
+            const btnViewAudit = document.getElementById('btn-view-audit');
+            if (btnViewAudit) btnViewAudit.addEventListener('click', onViewAuditClicked);
             imageInput.addEventListener('change', onImageChange);
             candidateForm.addEventListener('submit', onSubmitCandidate);
             btnReset.addEventListener('click', resetForm);
+        }
+
+        async function onViewAuditClicked(){
+            try{
+                const url = `/api/admin/audit?adminPin=${encodeURIComponent(ADMIN_PIN)}&limit=100`;
+                const res = await fetch(url, { method: 'GET', credentials: 'same-origin' });
+                if (!res.ok) throw new Error('Status ' + res.status);
+                const audits = await res.json();
+                showAuditModal(audits);
+            } catch(err){
+                console.error('Failed to load audit', err);
+                const fe = document.getElementById('fetchError');
+                fe.textContent = 'Failed to load audit: ' + (err && err.message ? err.message : err);
+                fe.style.display = '';
+            }
+        }
+
+        function showAuditModal(audits){
+            // Remove existing modal if any
+            const existing = document.getElementById('audit-modal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'audit-modal';
+            modal.style.position = 'fixed';
+            modal.style.left = '0';
+            modal.style.top = '0';
+            modal.style.right = '0';
+            modal.style.bottom = '0';
+            modal.style.background = 'rgba(0,0,0,0.5)';
+            modal.style.display = 'flex';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.innerHTML = `
+                <div style="background:white; width:90%; max-width:900px; max-height:80%; overflow:auto; border-radius:8px; padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="margin:0">Admin Audit</h3>
+                        <button id="audit-close" style="padding:6px 10px;">Close</button>
+                    </div>
+                    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <thead><tr style="text-align:left; border-bottom:1px solid #eee;"><th style="padding:6px">When</th><th style="padding:6px">Action</th><th style="padding:6px">Performed By</th><th style="padding:6px">Details</th></tr></thead>
+                        <tbody>
+                        ${ (audits || []).map(a => `<tr><td style="padding:6px;vertical-align:top">${new Date(a.performedAt).toLocaleString()}</td><td style="padding:6px;vertical-align:top">${a.action}</td><td style="padding:6px;vertical-align:top">${a.performedBy||''}</td><td style="padding:6px;vertical-align:top">${(a.details||'').replace(/</g,'&lt;')}</td></tr>`).join('') }
+                        </tbody>
+                    </table>
+                </div>`;
+
+            document.body.appendChild(modal);
+            document.getElementById('audit-close').addEventListener('click', ()=> modal.remove());
+        }
+
+        // Reset votes
+        async function onResetVotesClicked(){
+            if (!confirm('Reset all candidate vote counts to 0? This action cannot be undone.')) return;
+            try{
+                // Prompt admin for optional category and performedBy (audit) values
+                const categoryInput = prompt('Enter category to reset (KING, QUEEN, PRINCE, PRINCESS) or leave blank for ALL:');
+                let category = (categoryInput || '').trim();
+                if (category) category = category.toUpperCase();
+                const allowed = ['KING','QUEEN','PRINCE','PRINCESS','COUPLE'];
+                if (category && !allowed.includes(category)) {
+                    alert('Invalid category: ' + category + '\nValid values: ' + allowed.join(', '));
+                    return;
+                }
+
+                const performedByInput = prompt('Enter your name or identifier for audit (optional):');
+                const performedBy = (performedByInput || '').trim();
+
+                // Build URL with optional params
+                let url = `/api/admin/candidates/reset-votes?adminPin=${encodeURIComponent(ADMIN_PIN)}`;
+                if (category) url += `&category=${encodeURIComponent(category)}`;
+                if (performedBy) url += `&performedBy=${encodeURIComponent(performedBy)}`;
+
+                const res = await fetch(url, { method: 'POST', credentials: 'same-origin' });
+                if (!res.ok) {
+                    const text = await res.text().catch(()=>null);
+                    throw new Error(text || ('Status ' + res.status));
+                }
+                const payload = await res.json();
+                showToast(payload.message || 'Votes reset');
+                // Force a full page reload so we always see fresh data and assets
+                window.location.reload();
+            } catch(err){
+                console.error('Failed to reset votes', err);
+                const fe = document.getElementById('fetchError');
+                fe.textContent = 'Failed to reset votes: ' + (err && err.message ? err.message : err);
+                fe.style.display = '';
+            }
         }
 
         function showToast(msg='Saved', ms=1400){
@@ -521,9 +632,6 @@
             candidateIdInput.value = c.id;
             nameInput.value = c.name;
             categorySelect.value = c.category;
-            // populate candidate number
-            const candidateNumberInput = document.getElementById('candidate-number');
-            if (candidateNumberInput) candidateNumberInput.value = c.number || c.candidateNumber || '';
             deptInput.value = c.department || '';
             imagePreview.src = c.imageUrl || '';
             imageFilename.textContent = '';
@@ -582,9 +690,6 @@
             const id = candidateIdInput.value ? parseInt(candidateIdInput.value,10) : null;
             const formData = new FormData();
             formData.append('name', nameInput.value.trim());
-            // include rank number
-            const candidateNumberVal = document.getElementById('candidate-number') ? document.getElementById('candidate-number').value : '';
-            if (candidateNumberVal) formData.append('candidateNumber', parseInt(candidateNumberVal,10));
             formData.append('department', deptInput.value.trim());
             formData.append('category', categorySelect.value);
             if (imageInput.files && imageInput.files[0]) formData.append('image', imageInput.files[0]);
@@ -594,27 +699,9 @@
             console.groupEnd();
 
             try{
-                // Client-side pre-check for rank conflicts (prevents obvious errors before upload)
-                try {
-                    const number = candidateNumberVal ? parseInt(candidateNumberVal,10) : null;
-                    if (number) {
-                        const excludeParam = id ? `&excludeId=${encodeURIComponent(id)}` : '';
-                        const resCheck = await fetch(`/api/admin/candidates/check-rank?category=${encodeURIComponent(categorySelect.value)}&number=${encodeURIComponent(number)}${excludeParam}`);
-                        if (resCheck && resCheck.ok) {
-                            const payload = await resCheck.json();
-                            if (payload && payload.taken) {
-                                const fe = document.getElementById('fetchError');
-                                fe.textContent = `Rank ${number} is already taken by the paired category. Please choose a different rank.`;
-                                fe.style.display = '';
-                                return; // stop submission
-                            }
-                        }
-                    }
-                } catch (checkErr) {
-                    console.warn('Rank check failed, proceeding to submit; server will enforce rule', checkErr);
-                }
+                // No rank validation in admin UI — backend still accepts candidateNumber if provided, but admin will not send it from the UI.
 
-                // If mock mode is active we still use the mock endpoints (FormData). Otherwise call admin endpoints with JSON and adminPin.
+                 // If mock mode is active we still use the mock endpoints (FormData). Otherwise call admin endpoints with JSON and adminPin.
                 if (window.__USE_MOCK === true || window.location.search.includes('mock=true')){
                     if (id){
                         const res = await fetch(`/api/candidates/${id}`, { method: 'PUT', body: formData, credentials: 'same-origin' });

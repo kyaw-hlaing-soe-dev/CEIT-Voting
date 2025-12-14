@@ -224,31 +224,6 @@
   };
 
   const submitVotes = async ({ pin, deviceId, votes }) => {
-    // Client-side validation: ensure no candidateNumber is reused across paired categories for the same voter
-    // Build a map of category -> number
-    const incoming = new Map();
-    for (const item of votes) {
-      if (!item || !item.category) continue;
-      incoming.set(item.category, item.candidateNumber);
-    }
-
-    const paired = {
-      KING: ['PRINCE'],
-      PRINCE: ['KING'],
-      QUEEN: ['PRINCESS'],
-      PRINCESS: ['QUEEN']
-    };
-
-    for (const [cat, num] of incoming.entries()) {
-      const pair = paired[cat];
-      if (!pair || !num) continue;
-      for (const p of pair) {
-        if (incoming.has(p) && incoming.get(p) === num) {
-          throw new Error(`Invalid selection: Candidate No.${num} selected for both ${cat} and ${p}.`);
-        }
-      }
-    }
-
     // Get all device identification data for multi-factor verification
     let fingerprint = null;
     let hardwareHash = null;

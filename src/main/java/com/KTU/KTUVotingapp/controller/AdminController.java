@@ -9,7 +9,12 @@ import com.KTU.KTUVotingapp.repository.CandidateRepository;
 import com.KTU.KTUVotingapp.service.ImageStorageService;
 import com.KTU.KTUVotingapp.dto.CandidateForm;
 import com.KTU.KTUVotingapp.service.CandidateService;
+import com.KTU.KTUVotingapp.repository.AdminActionAuditRepository;
+import com.KTU.KTUVotingapp.model.AdminActionAudit;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -34,12 +39,15 @@ public class AdminController {
 
     private final CandidateService candidateService;
 
-    public AdminController(ResultService resultService, CandidateRepository candidateRepository, ImageStorageService imageStorageService, CandidateService candidateService) {
+    private final AdminActionAuditRepository auditRepository;
+
+    public AdminController(ResultService resultService, CandidateRepository candidateRepository, ImageStorageService imageStorageService, CandidateService candidateService, AdminActionAuditRepository auditRepository) {
         this.resultService = resultService;
         this.adminPin = "99999";
         this.candidateRepository = candidateRepository;
         this.imageStorageService = imageStorageService;
         this.candidateService = candidateService;
+        this.auditRepository = auditRepository;
     }
 
     /**
@@ -284,5 +292,47 @@ public class AdminController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", "INVALID_CATEGORY"));
         }
+    }
+
+    @PostMapping("/candidates/reset-votes")
+    public ResponseEntity<?> resetAllVotes(@RequestParam("adminPin") String pin,
+                                           @RequestParam(value = "category", required = false) String categoryStr,
+                                           @RequestParam(value = "performedBy", required = false) String performedBy) {
+        if (pin == null || !pin.equals(adminPin)) {
+            return ResponseEntity.status(403).body("Forbidden");
+        }
+
+        try {
+            if (categoryStr != null && !categoryStr.isBlank()) {
+                try {
+                    Category category = Category.valueOf(categoryStr.toUpperCase());
+                    int updated = candidateService.resetVotesByCategory(category, performedBy);
+                    return ResponseEntity.ok(Map.of("updatedRows", updated, "message", "Candidate vote counts reset for category " + category));
+                } catch (IllegalArgumentException e) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "INVALID_CATEGORY", "message", "Category not recognized: " + categoryStr));
+                }
+            } else {
+                int updated = candidateService.resetAllVotes(performedBy);
+                return ResponseEntity.ok(Map.of("updatedRows", updated, "message", "All candidate vote counts have been reset to 0."));
+            }
+         } catch (Exception e) {
+             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "RESET_FAILED", "message", e.getMessage()));
+         }
+     }
+
+    /**
+     * Returns recent admin audit records (most recent first). Protected by adminPin.
+     */
+    @GetMapping("/audit")
+    public ResponseEntity<?> getAudit(@RequestParam("adminPin") String pin,
+                                      @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
+        if (pin == null || !pin.equals(adminPin)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        int pageSize = Math.max(1, Math.min(limit, 200));
+        PageRequest pr = PageRequest.of(0, pageSize, Sort.by(Sort.Direction.DESC, "performedAt"));
+        var page = auditRepository.findAll(pr);
+        return ResponseEntity.ok(page.getContent());
     }
 }

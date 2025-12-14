@@ -3,12 +3,16 @@ package com.KTU.KTUVotingapp.service;
 import com.KTU.KTUVotingapp.dto.CandidateDTO;
 import com.KTU.KTUVotingapp.dto.CandidateForm;
 import com.KTU.KTUVotingapp.exception.RankingConflictException;
+import com.KTU.KTUVotingapp.model.AdminActionAudit;
 import com.KTU.KTUVotingapp.model.Candidate;
 import com.KTU.KTUVotingapp.model.Category;
+import com.KTU.KTUVotingapp.repository.AdminActionAuditRepository;
 import com.KTU.KTUVotingapp.repository.CandidateRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -20,9 +24,11 @@ import java.util.stream.Collectors;
 public class CandidateService {
 
     private final CandidateRepository candidateRepository;
+    private final AdminActionAuditRepository auditRepository;
 
-    public CandidateService(CandidateRepository candidateRepository) {
+    public CandidateService(CandidateRepository candidateRepository, AdminActionAuditRepository auditRepository) {
         this.candidateRepository = candidateRepository;
+        this.auditRepository = auditRepository;
     }
 
     @Cacheable(value = "candidates", key = "#category")
@@ -122,5 +128,35 @@ public class CandidateService {
         if (imageUpdater != null) imageUpdater.accept(existing);
 
         return candidateRepository.save(existing);
+    }
+
+    /**
+     * Reset all candidate vote counts to zero in a separate transaction.
+     * Uses REQUIRES_NEW to ensure the update runs atomically and independently
+     * of any surrounding transaction. Evicts caches after update.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED, propagation = Propagation.REQUIRES_NEW)
+    @CacheEvict(value = {"results", "candidates"}, allEntries = true)
+    public int resetAllVotes() {
+        return resetAllVotes(null);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED, propagation = Propagation.REQUIRES_NEW)
+    @CacheEvict(value = {"results", "candidates"}, allEntries = true)
+    public int resetAllVotes(String performedBy) {
+        int updated = candidateRepository.resetAllVoteCounts();
+        // Record audit
+        String details = "Reset all candidate vote counts to 0. Rows affected: " + updated;
+        auditRepository.save(new AdminActionAudit("RESET_ALL_VOTES", details, performedBy));
+        return updated;
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED, propagation = Propagation.REQUIRES_NEW)
+    @CacheEvict(value = {"results", "candidates"}, allEntries = true)
+    public int resetVotesByCategory(Category category, String performedBy) {
+        int updated = candidateRepository.resetVoteCountsByCategory(category);
+        String details = "Reset votes for category " + category + ". Rows affected: " + updated;
+        auditRepository.save(new AdminActionAudit("RESET_VOTES_BY_CATEGORY", details, performedBy));
+        return updated;
     }
 }

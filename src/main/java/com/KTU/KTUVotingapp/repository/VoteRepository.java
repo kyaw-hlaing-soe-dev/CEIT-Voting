@@ -33,13 +33,4 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 
     @Query("SELECT COUNT(v) FROM Vote v WHERE v.candidate.id = :candidateId")
     long countByCandidateId(@Param("candidateId") Long candidateId);
-
-    // New: Lock and fetch all votes for voter (join fetch candidate) to inspect candidate numbers safely
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT v FROM Vote v JOIN FETCH v.candidate WHERE v.voter = :voter")
-    List<Vote> findByVoterWithLock(@Param("voter") Voter voter);
-
-    // New: existence check for same candidateNumber in provided categories
-    @Query("SELECT CASE WHEN COUNT(v) > 0 THEN true ELSE false END FROM Vote v WHERE v.voter = :voter AND v.candidate.candidateNumber = :number AND v.category IN :cats")
-    boolean existsByVoterAndCandidate_CandidateNumberAndCategoryIn(@Param("voter") Voter voter, @Param("number") Integer number, @Param("cats") Iterable<Category> cats);
 }
