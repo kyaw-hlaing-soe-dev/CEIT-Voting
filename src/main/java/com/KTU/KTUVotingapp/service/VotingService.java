@@ -18,7 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class VotingService {
@@ -34,6 +35,17 @@ public class VotingService {
         this.candidateRepository = candidateRepository;
     }
 
+    private Iterable<Category> pairedCategories(Category category) {
+        if (category == null) return List.of();
+        return switch (category) {
+            case KING -> List.of(Category.PRINCE);
+            case PRINCE -> List.of(Category.KING);
+            case QUEEN -> List.of(Category.PRINCESS);
+            case PRINCESS -> List.of(Category.QUEEN);
+            default -> List.of();
+        };
+    }
+
     /**
      * Submit a single vote with pessimistic locking and transaction management.
      * Uses READ_COMMITTED isolation level for optimal performance with consistency.
@@ -47,14 +59,12 @@ public class VotingService {
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     @CacheEvict(value = {"results", "candidates"}, allEntries = true)
     public void submitVote(VoteRequest request) {
-        // NOTE: removed pessimistic locking reads to shorten transaction duration and avoid
-        // heavy lock contention. Use non-locking checks and let DB constraints guard uniqueness.
-
         String ipAddress = request.getIpAddress();
         String fingerprint = request.getFingerprint();
         String hardwareHash = request.getHardwareHash();
         String screenInfo = request.getScreenInfo();
 
+        // Device checks (unchanged)
         // MULTI-FACTOR DEVICE CHECK: Check all device identifiers
 
         // Check 1: IP address
@@ -90,7 +100,6 @@ public class VotingService {
             }
         }
 
-        // Step 1: Check device ID existence (non-locking quick check)
         Optional<Voter> existingDeviceVoter = voterRepository.findByDeviceId(request.getDeviceId());
         if (existingDeviceVoter.isPresent()) {
             Voter existingVoter = existingDeviceVoter.get();
@@ -100,7 +109,6 @@ public class VotingService {
             }
         }
 
-        // Step 2: Get or create voter by device ID (PIN can be shared)
         Voter voter = getOrCreateVoter(request.getPin(), request.getDeviceId(),
                                        request.getUserAgent(), request.getIpAddress(),
                                        request.getFingerprint(), request.getHardwareHash(),
@@ -111,38 +119,56 @@ public class VotingService {
                 "This device has already submitted a vote");
         }
 
-        // Step 3: Check if voter already voted in this category (non-locking existence check)
+        // Check if voter already voted in this category
         if (voteRepository.existsByVoterAndCategory(voter, request.getCategory())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "You have already voted in this category");
         }
 
-        // Step 4: Get candidate
+        // Validate candidate exists
         Candidate candidate = candidateRepository.findByCategoryAndCandidateNumber(
                 request.getCategory(), request.getCandidateNumber())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                     "Candidate not found for category " + request.getCategory() +
                     " and number " + request.getCandidateNumber()));
 
-        // Step 5: Create and save vote (database constraint will prevent duplicates)
+        // CRITICAL SECTION: prevent race conditions by locking existing votes for the voter
+        // Acquire pessimistic write lock on voter's votes (join fetch candidate) to inspect candidate numbers safely
+        List<Vote> lockedVotes = voteRepository.findByVoterWithLock(voter);
+
+        // Business rule: disallow same candidateNumber across paired categories
+        Iterable<Category> paired = pairedCategories(request.getCategory());
+        if (voteRepository.existsByVoterAndCandidate_CandidateNumberAndCategoryIn(voter, request.getCandidateNumber(), paired)) {
+            // Find the conflicting category for message clarity
+            Optional<Vote> conflict = lockedVotes.stream()
+                    .filter(v -> paired.iterator() != null && containsCategory(paired, v.getCategory()) && v.getCandidate().getCandidateNumber().equals(request.getCandidateNumber()))
+                    .findFirst();
+            String conflictCategory = conflict.map(v -> v.getCategory().name()).orElse("paired category");
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                String.format("You already voted Candidate No.%d for %s. You cannot choose Candidate No.%d for %s.",
+                    request.getCandidateNumber(), conflictCategory, request.getCandidateNumber(), request.getCategory()));
+        }
+
+        // Create vote and persist
         try {
             Vote vote = new Vote(voter, candidate, request.getCategory());
             voteRepository.save(vote);
-
-            // Atomically increment candidate vote count in DB to avoid lost updates
             candidateRepository.incrementVoteCount(candidate.getId());
 
-            // Update voter status
             if (!voter.isHasVoted()) {
                 voter.setHasVoted(true);
                 voter.setVotedAt(LocalDateTime.now());
                 voterRepository.save(voter);
             }
         } catch (DataIntegrityViolationException e) {
-            // Database constraint violation - handle gracefully
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "Duplicate vote detected. You may have already voted in this category.");
         }
+    }
+
+    private boolean containsCategory(Iterable<Category> cats, Category c) {
+        for (Category x : cats) if (x == c) return true;
+        return false;
     }
 
     /**
@@ -196,7 +222,6 @@ public class VotingService {
             }
         }
 
-        // Step 1: Check device ID existence (non-locking)
         Optional<Voter> existingDeviceVoter = voterRepository.findByDeviceId(request.getDeviceId());
         if (existingDeviceVoter.isPresent()) {
             Voter existingVoter = existingDeviceVoter.get();
@@ -206,7 +231,6 @@ public class VotingService {
             }
         }
 
-        // Step 2: Get or create voter by device ID (PIN can be shared)
         Voter voter = getOrCreateVoter(request.getPin(), request.getDeviceId(),
                                        request.getUserAgent(), request.getIpAddress(),
                                        request.getFingerprint(), request.getHardwareHash(),
@@ -217,37 +241,59 @@ public class VotingService {
                 "This device has already submitted votes");
         }
 
-        // Step 3: Validate all votes before processing
-        for (BulkVoteRequest.VoteItem voteItem : request.getVotes()) {
-            // Check if already voted in this category
-            if (voteRepository.existsByVoterAndCategory(voter, voteItem.getCategory())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "You have already voted in category: " + voteItem.getCategory());
-            }
+        // Lock existing votes to inspect candidate numbers for conflicts
+        List<Vote> lockedVotes = voteRepository.findByVoterWithLock(voter);
 
-            // Validate candidate exists
-            candidateRepository.findByCategoryAndCandidateNumber(
-                    voteItem.getCategory(), voteItem.getCandidateNumber())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Candidate not found for category " + voteItem.getCategory() +
-                        " and number " + voteItem.getCandidateNumber()));
+        // Build map of existing candidateNumbers by category
+        Map<Category, Integer> existingNumbers = new HashMap<>();
+        for (Vote v : lockedVotes) existingNumbers.put(v.getCategory(), v.getCandidate().getCandidateNumber());
+
+        // Convert incoming list to map and validate duplicates inside the bulk request
+        Map<Category, Integer> incoming = new HashMap<>();
+        for (BulkVoteRequest.VoteItem vi : request.getVotes()) {
+            if (incoming.containsKey(vi.getCategory())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate category in request: " + vi.getCategory());
+            }
+            incoming.put(vi.getCategory(), vi.getCandidateNumber());
         }
 
-        // Step 4: Process all votes
+        // Validate cross-category same-number rule between pairs and with existing votes
+        for (Map.Entry<Category, Integer> entry : incoming.entrySet()) {
+            Category cat = entry.getKey();
+            Integer num = entry.getValue();
+            Iterable<Category> paired = pairedCategories(cat);
+
+            // Check against existing votes in paired categories
+            if (voteRepository.existsByVoterAndCandidate_CandidateNumberAndCategoryIn(voter, num, paired)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    String.format("You already voted Candidate No.%d in a paired category. You cannot choose Candidate No.%d for %s.", num, num, cat));
+            }
+
+            // Check against other incoming choices (e.g., user attempted KING #1 and PRINCE #1 in same bulk)
+            for (Category p : (Collection<Category>) paired) {
+                if (incoming.containsKey(p) && Objects.equals(incoming.get(p), num)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        String.format("Invalid selection: Candidate No.%d selected for both %s and %s.", num, cat, p));
+                }
+            }
+        }
+
+        // Validate candidate existence for each incoming vote
+        for (BulkVoteRequest.VoteItem vi : request.getVotes()) {
+            candidateRepository.findByCategoryAndCandidateNumber(vi.getCategory(), vi.getCandidateNumber())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Candidate not found for category " + vi.getCategory() + " and number " + vi.getCandidateNumber()));
+        }
+
+        // Process and persist votes
         try {
-            for (BulkVoteRequest.VoteItem voteItem : request.getVotes()) {
-                Candidate candidate = candidateRepository.findByCategoryAndCandidateNumber(
-                        voteItem.getCategory(), voteItem.getCandidateNumber())
-                        .orElseThrow();
-
-                Vote vote = new Vote(voter, candidate, voteItem.getCategory());
+            for (BulkVoteRequest.VoteItem vi : request.getVotes()) {
+                Candidate candidate = candidateRepository.findByCategoryAndCandidateNumber(vi.getCategory(), vi.getCandidateNumber()).orElseThrow();
+                Vote vote = new Vote(voter, candidate, vi.getCategory());
                 voteRepository.save(vote);
-
-                // Atomically increment candidate vote count in DB
                 candidateRepository.incrementVoteCount(candidate.getId());
             }
 
-            // Update voter status
             if (!voter.isHasVoted()) {
                 voter.setHasVoted(true);
                 voter.setVotedAt(LocalDateTime.now());
@@ -265,13 +311,11 @@ public class VotingService {
      * Device ID is unique, PIN can be shared across multiple devices.
      */
     private Voter getOrCreateVoter(String pin, String deviceId, String userAgent,
-                                   String ipAddress, String fingerprint,
-                                   String hardwareHash, String screenInfo) {
-        // Find by device ID first (non-locking quick check)
+                                   String ipAddress, String fingerprint, String hardwareHash,
+                                   String screenInfo) {
         Optional<Voter> voterOpt = voterRepository.findByDeviceId(deviceId);
 
         if (voterOpt.isPresent()) {
-            // Device already exists - update missing device identification fields
             Voter existingVoter = voterOpt.get();
             boolean updated = false;
 
@@ -297,7 +341,6 @@ public class VotingService {
             return existingVoter;
         }
 
-        // Create new voter with all device identification info
         try {
             Voter newVoter = new Voter(pin, deviceId);
             newVoter.setUserAgent(userAgent);
@@ -313,7 +356,6 @@ public class VotingService {
             }
             return voterRepository.save(newVoter);
         } catch (DataIntegrityViolationException e) {
-            // Race condition - another thread created the voter with same device ID
             return voterRepository.findByDeviceId(deviceId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
                         "Failed to create or find voter"));

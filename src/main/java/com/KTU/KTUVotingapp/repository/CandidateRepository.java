@@ -27,4 +27,11 @@ public interface CandidateRepository extends JpaRepository<Candidate, Long> {
     @Transactional
     @Query("UPDATE Candidate c SET c.voteCount = c.voteCount + 1 WHERE c.id = :id")
     int incrementVoteCount(@Param("id") Long id);
+
+    // Existence check for candidateNumber across a set of categories
+    boolean existsByCategoryInAndCandidateNumber(Iterable<Category> categories, Integer candidateNumber);
+
+    // Existence check across categories while excluding a candidate id (useful for updates)
+    @Query("SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Candidate c WHERE c.category IN :cats AND c.candidateNumber = :number AND (:excludeId IS NULL OR c.id <> :excludeId)")
+    boolean existsByCategoryInAndCandidateNumberExcludingId(@Param("cats") Iterable<Category> cats, @Param("number") Integer number, @Param("excludeId") Long excludeId);
 }

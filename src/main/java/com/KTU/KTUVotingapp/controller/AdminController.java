@@ -6,7 +6,11 @@ import com.KTU.KTUVotingapp.model.Candidate;
 import com.KTU.KTUVotingapp.model.Category;
 import com.KTU.KTUVotingapp.service.ResultService;
 import com.KTU.KTUVotingapp.repository.CandidateRepository;
+import com.KTU.KTUVotingapp.service.ImageStorageService;
+import com.KTU.KTUVotingapp.dto.CandidateForm;
+import com.KTU.KTUVotingapp.service.CandidateService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,12 +30,16 @@ public class AdminController {
     // Inject repository directly to avoid costly/contextual lookups per request
     private final CandidateRepository candidateRepository;
 
-    public AdminController(ResultService resultService, CandidateRepository candidateRepository) {
+    private final ImageStorageService imageStorageService;
+
+    private final CandidateService candidateService;
+
+    public AdminController(ResultService resultService, CandidateRepository candidateRepository, ImageStorageService imageStorageService, CandidateService candidateService) {
         this.resultService = resultService;
-        // Surgical fix: initialize adminPin so admin endpoints using adminPin checks work.
-        // This avoids null checks failing and allows the front-end to authenticate using the hardcoded PIN.
         this.adminPin = "99999";
         this.candidateRepository = candidateRepository;
+        this.imageStorageService = imageStorageService;
+        this.candidateService = candidateService;
     }
 
     /**
@@ -113,7 +121,7 @@ public class AdminController {
         return ResponseEntity.ok(dtos);
     }
 
-    @PostMapping("/candidates")
+    @PostMapping(value = "/candidates", consumes = MediaType.APPLICATION_JSON_VALUE)
     public org.springframework.http.ResponseEntity<?> createCandidate(@RequestParam("adminPin") String pin,
                                                                        @RequestBody com.KTU.KTUVotingapp.dto.CandidateDTO dto) {
         if (pin == null || !pin.equals(adminPin)) {
@@ -138,6 +146,44 @@ public class AdminController {
         return org.springframework.http.ResponseEntity.ok(response);
     }
 
+    // New: multipart/form-data create endpoint (accepts file optionally)
+    @PostMapping(value = "/candidates", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, params = "adminPin")
+    public org.springframework.http.ResponseEntity<?> createCandidateMultipart(@RequestParam("adminPin") String pin,
+                                                                                 @ModelAttribute CandidateForm form) {
+        if (pin == null || !pin.equals(adminPin)) {
+            return org.springframework.http.ResponseEntity.status(403).body("Forbidden");
+        }
+
+        com.KTU.KTUVotingapp.model.Candidate candidate = new com.KTU.KTUVotingapp.model.Candidate();
+        if (form.getCategory() != null) candidate.setCategory(form.getCategory());
+        if (form.getCandidateNumber() != null) candidate.setCandidateNumber(form.getCandidateNumber());
+        candidate.setName(form.getName());
+        candidate.setDepartment(form.getDepartment());
+        candidate.setVoteCount(form.getVoteCount() != null ? form.getVoteCount() : 0L);
+
+        try {
+            if (form.getImage() != null && !form.getImage().isEmpty()) {
+                String url = imageStorageService.store(form.getImage());
+                candidate.setImageUrl(url);
+            } else if (form.getImageUrl() != null) {
+                // If front-end provided an explicit imageUrl string, allow it
+                candidate.setImageUrl(form.getImageUrl());
+            }
+
+            // Use transactional service which will validate and use SERIALIZABLE isolation
+            com.KTU.KTUVotingapp.model.Candidate saved = candidateService.createCandidateTransactional(candidate);
+
+            com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
+                    saved.getId(), saved.getCategory(), saved.getCandidateNumber(), saved.getName(), saved.getDepartment(), saved.getImageUrl(), saved.getVoteCount()
+            );
+
+            return org.springframework.http.ResponseEntity.ok(response);
+        } catch (Exception e) {
+            // RankingConflictException is handled by ControllerAdvice to return 409 conflict
+            return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/candidates/{id}")
     public org.springframework.http.ResponseEntity<?> getCandidate(@RequestParam("adminPin") String pin, @PathVariable Long id) {
         if (pin == null || !pin.equals(adminPin)) {
@@ -154,7 +200,7 @@ public class AdminController {
         return org.springframework.http.ResponseEntity.ok(response);
     }
 
-    @PutMapping("/candidates/{id}")
+    @PutMapping(value = "/candidates/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public org.springframework.http.ResponseEntity<?> updateCandidate(@RequestParam("adminPin") String pin, @PathVariable Long id,
                                                                        @RequestBody com.KTU.KTUVotingapp.dto.CandidateDTO dto) {
         if (pin == null || !pin.equals(adminPin)) {
@@ -168,6 +214,7 @@ public class AdminController {
         if (dto.getCandidateNumber() != null) existing.setCandidateNumber(dto.getCandidateNumber());
         if (dto.getName() != null) existing.setName(dto.getName());
         if (dto.getDepartment() != null) existing.setDepartment(dto.getDepartment());
+        // Only update imageUrl when explicitly provided (non-null)
         if (dto.getImageUrl() != null) existing.setImageUrl(dto.getImageUrl());
         if (dto.getVoteCount() != null) existing.setVoteCount(dto.getVoteCount());
 
@@ -179,6 +226,41 @@ public class AdminController {
         return org.springframework.http.ResponseEntity.ok(response);
     }
 
+    // New: multipart/form-data update endpoint (accepts file optionally)
+    @PutMapping(value = "/candidates/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, params = "adminPin")
+    public org.springframework.http.ResponseEntity<?> updateCandidateMultipart(@RequestParam("adminPin") String pin, @PathVariable Long id,
+                                                                                 @ModelAttribute CandidateForm form) {
+        if (pin == null || !pin.equals(adminPin)) {
+            return org.springframework.http.ResponseEntity.status(403).body("Forbidden");
+        }
+
+        try {
+            // imageUpdater will store file if provided and set imageUrl on the candidate
+            java.util.function.Consumer<com.KTU.KTUVotingapp.model.Candidate> imageUpdater = c -> {
+                try {
+                    if (form.getImage() != null && !form.getImage().isEmpty()) {
+                        String url = imageStorageService.store(form.getImage());
+                        c.setImageUrl(url);
+                    } else if (form.getImageUrl() != null) {
+                        c.setImageUrl(form.getImageUrl());
+                    }
+                } catch (Exception ex) {
+                    throw new RuntimeException("Failed to store image: " + ex.getMessage(), ex);
+                }
+            };
+
+            com.KTU.KTUVotingapp.model.Candidate saved = candidateService.updateCandidateTransactional(id, form, imageUpdater);
+
+            com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
+                    saved.getId(), saved.getCategory(), saved.getCandidateNumber(), saved.getName(), saved.getDepartment(), saved.getImageUrl(), saved.getVoteCount()
+            );
+
+            return org.springframework.http.ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @DeleteMapping("/candidates/{id}")
     public org.springframework.http.ResponseEntity<?> deleteCandidate(@RequestParam("adminPin") String pin, @PathVariable Long id) {
         if (pin == null || !pin.equals(adminPin) ){
@@ -188,5 +270,19 @@ public class AdminController {
         if (!candidateRepository.existsById(id)) return org.springframework.http.ResponseEntity.notFound().build();
         candidateRepository.deleteById(id);
         return org.springframework.http.ResponseEntity.noContent().build();
+    }
+
+    // New: rank check endpoint used by frontend to validate before submitting
+    @GetMapping("/candidates/check-rank")
+    public ResponseEntity<?> checkRank(@RequestParam("category") String categoryStr,
+                                       @RequestParam("number") Integer number,
+                                       @RequestParam(value = "excludeId", required = false) Long excludeId) {
+        try {
+            Category category = Category.valueOf(categoryStr.toUpperCase());
+            boolean taken = candidateService.isRankTakenInPaired(category, number, excludeId);
+            return ResponseEntity.ok(Map.of("taken", taken));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "INVALID_CATEGORY"));
+        }
     }
 }

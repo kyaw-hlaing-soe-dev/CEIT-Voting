@@ -63,7 +63,7 @@
                     <div class="lg:col-span-1">
                         <div class="bg-white p-4 rounded-lg card-shadow">
                             <h3 class="font-semibold mb-3">Add / Edit Candidate</h3>
-                            <form id="candidate-form" class="space-y-4">
+                            <form id="candidate-form" class="space-y-4" enctype="multipart/form-data">
                                 <input type="hidden" id="candidate-id" />
                                 <div>
                                     <label for="candidate-name" class="block text-sm font-medium text-gray-700">Name</label>
@@ -75,6 +75,11 @@
                                     <select id="candidate-category" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm p-2" required>
                                         <!-- options injected -->
                                     </select>
+                                </div>
+
+                                <div>
+                                    <label for="candidate-number" class="block text-sm font-medium text-gray-700">Rank (Number)</label>
+                                    <input id="candidate-number" type="number" min="1" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm p-2" required />
                                 </div>
 
                                 <div>
@@ -516,6 +521,9 @@
             candidateIdInput.value = c.id;
             nameInput.value = c.name;
             categorySelect.value = c.category;
+            // populate candidate number
+            const candidateNumberInput = document.getElementById('candidate-number');
+            if (candidateNumberInput) candidateNumberInput.value = c.number || c.candidateNumber || '';
             deptInput.value = c.department || '';
             imagePreview.src = c.imageUrl || '';
             imageFilename.textContent = '';
@@ -574,6 +582,9 @@
             const id = candidateIdInput.value ? parseInt(candidateIdInput.value,10) : null;
             const formData = new FormData();
             formData.append('name', nameInput.value.trim());
+            // include rank number
+            const candidateNumberVal = document.getElementById('candidate-number') ? document.getElementById('candidate-number').value : '';
+            if (candidateNumberVal) formData.append('candidateNumber', parseInt(candidateNumberVal,10));
             formData.append('department', deptInput.value.trim());
             formData.append('category', categorySelect.value);
             if (imageInput.files && imageInput.files[0]) formData.append('image', imageInput.files[0]);
@@ -583,6 +594,26 @@
             console.groupEnd();
 
             try{
+                // Client-side pre-check for rank conflicts (prevents obvious errors before upload)
+                try {
+                    const number = candidateNumberVal ? parseInt(candidateNumberVal,10) : null;
+                    if (number) {
+                        const excludeParam = id ? `&excludeId=${encodeURIComponent(id)}` : '';
+                        const resCheck = await fetch(`/api/admin/candidates/check-rank?category=${encodeURIComponent(categorySelect.value)}&number=${encodeURIComponent(number)}${excludeParam}`);
+                        if (resCheck && resCheck.ok) {
+                            const payload = await resCheck.json();
+                            if (payload && payload.taken) {
+                                const fe = document.getElementById('fetchError');
+                                fe.textContent = `Rank ${number} is already taken by the paired category. Please choose a different rank.`;
+                                fe.style.display = '';
+                                return; // stop submission
+                            }
+                        }
+                    }
+                } catch (checkErr) {
+                    console.warn('Rank check failed, proceeding to submit; server will enforce rule', checkErr);
+                }
+
                 // If mock mode is active we still use the mock endpoints (FormData). Otherwise call admin endpoints with JSON and adminPin.
                 if (window.__USE_MOCK === true || window.location.search.includes('mock=true')){
                     if (id){
@@ -599,22 +630,16 @@
                         showToast('Created');
                     }
                 } else {
-                    // Construct JSON payload for real backend admin endpoints
-                    const payloadBody = {
-                        name: nameInput.value.trim(),
-                        department: deptInput.value.trim(),
-                        category: categorySelect.value,
-                        imageUrl: imagePreview.src || null
-                    };
-
+                    // Real backend: send multipart/form-data to admin endpoints. The form is encoded automatically by the browser when using FormData.
+                    const adminPin = ADMIN_PIN;
                     if (id){
-                        const res = await fetch(`/api/admin/candidates/${id}?adminPin=${encodeURIComponent(ADMIN_PIN)}`, { method: 'PUT', body: JSON.stringify(payloadBody), credentials: 'same-origin', headers:{ 'Content-Type':'application/json' } });
+                        const res = await fetch(`/api/admin/candidates/${id}?adminPin=${encodeURIComponent(adminPin)}`, { method: 'PUT', body: formData, credentials: 'same-origin' });
                         if (!res.ok) throw new Error('Status ' + res.status);
                         const payload = await res.json();
                         console.log('Admin PUT response', payload);
                         showToast('Updated');
                     } else {
-                        const res = await fetch(`/api/admin/candidates?adminPin=${encodeURIComponent(ADMIN_PIN)}`, { method: 'POST', body: JSON.stringify(payloadBody), credentials: 'same-origin', headers:{ 'Content-Type':'application/json' } });
+                        const res = await fetch(`/api/admin/candidates?adminPin=${encodeURIComponent(adminPin)}`, { method: 'POST', body: formData, credentials: 'same-origin' });
                         if (!res.ok) throw new Error('Status ' + res.status);
                         const payload = await res.json();
                         console.log('Admin POST response', payload);
