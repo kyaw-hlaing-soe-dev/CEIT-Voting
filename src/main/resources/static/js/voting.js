@@ -490,27 +490,67 @@
     };
 
     // Render Options
+    // slots must be visible in the outer scope (restore & next handler) so declare here
+    let slots = [];
     if (container) {
       container.innerHTML = '';
       container.classList.add('radio-grid');
 
-      candidates.forEach((candidate) => {
+      // Fixed UI: always show slots 1..9. Prefer candidates whose candidateNumber is in 1..9.
+      const MAX_SLOTS = 9;
+      slots = new Array(MAX_SLOTS).fill(null);
+
+      // Place candidates that already have a candidateNumber in 1..9 into their slot
+      candidates.forEach(c => {
+        const n = parseInt(c.candidateNumber, 10);
+        if (!Number.isNaN(n) && n >= 1 && n <= MAX_SLOTS) {
+          slots[n - 1] = c;
+        }
+      });
+
+      // Fill remaining empty slots with candidates in list order (skipping ones already placed)
+      let ci = 0;
+      for (let s = 0; s < MAX_SLOTS; s++) {
+        if (slots[s] == null) {
+          while (ci < candidates.length && slots.includes(candidates[ci])) ci++;
+          if (ci < candidates.length) {
+            slots[s] = candidates[ci];
+            ci++;
+          }
+        }
+      }
+
+      // Render 1..9 slots
+      for (let i = 1; i <= MAX_SLOTS; i++) {
+        const cand = slots[i - 1];
         const label = document.createElement('label');
         label.className = 'radio-option';
-        label.htmlFor = `option-${candidate.candidateNumber}`;
-        label.innerHTML = `
-          <span class="number">${candidate.candidateNumber}</span>
-          <input type="radio" id="option-${candidate.candidateNumber}" name="selection" value="${candidate.candidateNumber}" />
-        `;
+        label.htmlFor = `option-${i}`;
+
+        // If there's no candidate for this slot, render disabled radio with placeholder
+        if (!cand) {
+          label.innerHTML = `
+            <span class="number">${i}</span>
+            <input type="radio" id="option-${i}" name="selection" value="${i}" disabled />
+          `;
+        } else {
+          // Use slot index as the value to keep labels 1..9; we will map slot -> candidate when changed
+          label.innerHTML = `
+            <span class="number">${i}</span>
+            <input type="radio" id="option-${i}" name="selection" value="${i}" />
+          `;
+        }
         container.appendChild(label);
-      });
+      }
 
       layoutOptions(container);
 
       container.querySelectorAll('input[name="selection"]').forEach((input) => {
         input.addEventListener('change', (evt) => {
           selectedNumber = parseInt(evt.target.value, 10);
-          const cand = candidates.find(c => c.candidateNumber === selectedNumber);
+          // Map selected slot (1..9) to candidate object from slots
+          const slotIndex = selectedNumber - 1;
+          const cand = (slotIndex >= 0 && slotIndex < 9) ? slots[slotIndex] : null;
 
           // Play sound and visual feedback
           const labelEl = evt.target.closest('.radio-option');
@@ -533,25 +573,47 @@
 
     // Restore saved selection or show first candidate
     if (selectedNumber) {
-      const saved = candidates.find(c => c.candidateNumber === selectedNumber);
+      // If saved selection exists, try to find which slot it occupies (match by candidate id or candidateNumber)
+      const savedObj = loadSelection(category);
+      let saved = null;
+      if (savedObj && savedObj.id) {
+        saved = candidates.find(c => String(c.id) === String(savedObj.id));
+      }
+      if (!saved && savedObj && savedObj.candidateNumber) {
+        // fallback: match by candidateNumber
+        saved = candidates.find(c => c.candidateNumber === savedObj.candidateNumber);
+      }
       if (saved) {
-        const input = document.querySelector(
-          `input[name="selection"][value="${selectedNumber}"]`
-        );
-        if (input) {
-          input.checked = true;
-          // Highlight the selected option
-          const labelEl = input.closest('.radio-option');
-          if (labelEl) labelEl.classList.add('selected');
+        // Find the slot index for saved candidate
+        let slotIndex = -1;
+        for (let i = 0; i < Math.min(9, slots.length); i++) {
+          const s = slots[i];
+          if (s && String(s.id) === String(saved.id)) { slotIndex = i; break; }
         }
+        const input = slotIndex >= 0 ? document.querySelector(
+          `input[name="selection"][value="${slotIndex+1}"]`
+        ) : null;
+         if (input) {
+           input.checked = true;
+           // Highlight the selected option
+           const labelEl = input.closest('.radio-option');
+           if (labelEl) labelEl.classList.add('selected');
+         }
+        // ensure selectedNumber reflects the slot (1..9)
+        if (slotIndex >= 0) selectedNumber = slotIndex + 1;
         updateCandidateDisplay(saved);
-      } else selectedNumber = null;
-    }
+       } else selectedNumber = null;
+     }
 
     // Show random candidate's data on initial load if no selection saved
-    if (!selectedNumber && candidates.length > 0) {
-      const randomIndex = Math.floor(Math.random() * candidates.length);
-      updateCandidateDisplay(candidates[randomIndex]);
+    if (!selectedNumber) {
+      // show first available slot candidate or random candidate as fallback
+      const firstFilled = slots.find(s => s);
+      if (firstFilled) updateCandidateDisplay(firstFilled);
+      else if (candidates.length > 0) {
+        const randomIndex = Math.floor(Math.random() * candidates.length);
+        updateCandidateDisplay(candidates[randomIndex]);
+      }
     }
 
     updateNextButton();
@@ -563,62 +625,9 @@
           return;
         }
 
-        const cand = candidates.find(c => c.candidateNumber === selectedNumber);
+        // Map selected slot to candidate object
+        const slotIndex = selectedNumber - 1;
+        const cand = (slotIndex >= 0 && slotIndex < slots.length) ? slots[slotIndex] : null;
         if (cand) saveSelection(category, cand);
 
-        if (nextUrl) window.location.href = nextUrl;
-      });
-    }
-
-    if (prevBtn && prevUrl)
-      prevBtn.addEventListener('click', () => (window.location.href = prevUrl));
-
-    document.querySelectorAll('[data-close-modal]').forEach((btn) =>
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-close-modal');
-        const m = document.getElementById(id);
-        if (m) m.classList.add('hidden');
-      })
-    );
-  }
-
-  // --- Init ---
-  function initAuto() {
-    injectStyles();
-    observeContainer('options-container');
-  }
-
-  if (document.readyState === 'loading')
-    document.addEventListener('DOMContentLoaded', initAuto);
-  else initAuto();
-
-  // --- Load all selections for summary page ---
-  const loadSelectionsForSummary = () => {
-    return CATEGORIES.map(category => ({
-      category,
-      selection: loadSelection(category)
-    }));
-  };
-
-  // --- Public API ---
-  window.VotingApp = Object.assign(window.VotingApp || {}, {
-    API_BASE,
-    CATEGORIES,
-    getDeviceId,
-    getDeviceIdSync,
-    getStoredPin,
-    savePin,
-    verifyPin,
-    checkDeviceStatus,
-    fetchCandidates,
-    submitVotes,
-    saveSelection,
-    loadSelection,
-    clearSelections,
-    loadSelectionsForSummary,
-    initSelectionPage,
-    layoutOptions,
-    playKeypadFeedback,
-    playRadioFeedback,
-  });
-})();
+        if
