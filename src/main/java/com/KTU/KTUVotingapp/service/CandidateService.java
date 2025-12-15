@@ -95,6 +95,7 @@ public class CandidateService {
 
     // Transactional save with SERIALIZABLE isolation to avoid race conditions when assigning same rank concurrently
     @Transactional(isolation = Isolation.SERIALIZABLE)
+    @CacheEvict(value = {"results", "candidates"}, allEntries = true)
     public Candidate createCandidateTransactional(Candidate candidate) {
         // Validate again inside transaction to prevent race
         validateRankingConflictForCreate(candidate.getCategory(), candidate.getCandidateNumber());
@@ -103,6 +104,7 @@ public class CandidateService {
 
     // Update candidate - handle editing existing selections: if candidateNumber or category changed, validate conflicts
     @Transactional(isolation = Isolation.SERIALIZABLE)
+    @CacheEvict(value = {"results", "candidates"}, allEntries = true)
     public Candidate updateCandidateTransactional(Long id, CandidateForm form, java.util.function.Consumer<Candidate> imageUpdater) {
         Candidate existing = getCandidateById(id);
         Category newCategory = form.getCategory() != null ? form.getCategory() : existing.getCategory();
@@ -158,5 +160,16 @@ public class CandidateService {
         String details = "Reset votes for category " + category + ". Rows affected: " + updated;
         auditRepository.save(new AdminActionAudit("RESET_VOTES_BY_CATEGORY", details, performedBy));
         return updated;
+    }
+
+    @Transactional
+    @CacheEvict(value = {"results", "candidates"}, allEntries = true)
+    public void deleteCandidate(Long id) {
+        candidateRepository.deleteById(id);
+    }
+
+    @CacheEvict(value = {"results", "candidates"}, allEntries = true)
+    public void evictCaches() {
+        // Annotation-only helper invoked after JSON-based mutations
     }
 }

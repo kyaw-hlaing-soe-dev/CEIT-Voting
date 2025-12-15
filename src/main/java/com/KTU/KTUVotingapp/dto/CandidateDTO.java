@@ -81,5 +81,9 @@ public class CandidateDTO {
     public void setVoteCount(Long voteCount) {
         this.voteCount = voteCount;
     }
-}
 
+    public CandidateDTO(Long id, Category category, Integer candidateNumber, String name,
+                       String department, String imageUrl, Long voteCount, boolean includeNumber) {
+        this(id, category, candidateNumber, name, department, imageUrl, voteCount);
+    }
+}

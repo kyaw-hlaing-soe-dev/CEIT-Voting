@@ -9,6 +9,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -51,11 +52,8 @@ public class ResultService {
 
     @Cacheable(value = "results", key = "'all'")
     public List<ResultDTO> getAllResults() {
-        return List.of(
-                getResultsByCategory(Category.KING),
-                getResultsByCategory(Category.QUEEN),
-                getResultsByCategory(Category.PRINCE),
-                getResultsByCategory(Category.PRINCESS)
-        );
+        return EnumSet.allOf(Category.class).stream()
+                .map(this::getResultsByCategory)
+                .collect(Collectors.toList());
     }
 }
