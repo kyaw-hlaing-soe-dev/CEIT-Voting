@@ -55,9 +55,7 @@ public class ResultService {
                 getResultsByCategory(Category.KING),
                 getResultsByCategory(Category.QUEEN),
                 getResultsByCategory(Category.PRINCE),
-                getResultsByCategory(Category.PRINCESS),
-                getResultsByCategory(Category.COUPLE)
+                getResultsByCategory(Category.PRINCESS)
         );
     }
 }
-

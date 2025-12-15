@@ -37,6 +37,10 @@ public class Vote {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
+
+    @Column(name = "candidate_number")
+    private Integer candidateNumber;
+
     public Vote() {
     }
 
@@ -44,6 +48,8 @@ public class Vote {
         this.voter = voter;
         this.candidate = candidate;
         this.category = category;
+        // ensure candidateNumber is populated when a Candidate is provided
+        this.candidateNumber = candidate != null ? candidate.getCandidateNumber() : null;
     }
 
     public Long getId() {
@@ -64,6 +70,9 @@ public class Vote {
 
     public void setCandidate(Candidate candidate) {
         this.candidate = candidate;
+        if (candidate != null) {
+            this.candidateNumber = candidate.getCandidateNumber();
+        }
     }
 
     public Category getCategory() {
@@ -77,6 +86,9 @@ public class Vote {
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
+
+    public Integer getCandidateNumber() { return candidateNumber; }
+    public void setCandidateNumber(Integer candidateNumber) { this.candidateNumber = candidateNumber; }
+
+
 }
-
-

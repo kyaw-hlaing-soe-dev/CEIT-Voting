@@ -18,7 +18,7 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 
     List<Vote> findByVoter(Voter voter);
 
-    List<Vote> findByVoterAndCategory(Voter voter, Category category);
+    Optional<Vote> findByVoterAndCategory(Voter voter, Category category);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT v FROM Vote v WHERE v.voter = :voter AND v.category = :category")
@@ -33,4 +33,6 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 
     @Query("SELECT COUNT(v) FROM Vote v WHERE v.candidate.id = :candidateId")
     long countByCandidateId(@Param("candidateId") Long candidateId);
+
+
 }

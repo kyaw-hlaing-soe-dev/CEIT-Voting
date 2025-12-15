@@ -281,6 +281,53 @@
 
     return body;
   };
+  // Example frontend validation: disables same candidate number in the paired category.
+  // Assumes inputs like: <select data-category="KING"> or radio inputs with data-category attribute.
+
+  const pairing = {
+    KING: 'PRINCE',
+    PRINCE: 'KING',
+    QUEEN: 'PRINCESS',
+    PRINCESS: 'QUEEN'
+  };
+
+  function onSelectionChange(event) {
+    const el = event.target;
+    const category = el.dataset.category;
+    const value = el.value; // candidate number as string
+    const paired = pairing[category];
+    if (!paired) return;
+
+    // disable same candidate option in paired category select/radios
+    // handle <select>
+    const pairedSelect = document.querySelector(`[data-category="${paired}"]`);
+    if (pairedSelect && pairedSelect.tagName === 'SELECT') {
+      for (const opt of pairedSelect.options) {
+        opt.disabled = (opt.value === value);
+      }
+    }
+
+    // handle radio groups
+    const pairedRadios = document.querySelectorAll(`input[type="radio"][data-category="${paired}"]`);
+    pairedRadios.forEach(r => {
+      if (r.value === value) {
+        r.disabled = true;
+        // if currently selected, show client error and unselect
+        if (r.checked) {
+          r.checked = false;
+          alert(`You already voted Candidate No.${value} for ${paired}. You cannot choose Candidate No.${value} for ${category}.`);
+        }
+      } else {
+        r.disabled = false;
+      }
+    });
+  }
+
+  // attach listeners to selects and radios
+  document.querySelectorAll('select[data-category], input[type="radio"][data-category]').forEach(el => {
+    el.addEventListener('change', onSelectionChange);
+  });
+
 
   // --- Inject CSS styles ---
   function injectStyles() {

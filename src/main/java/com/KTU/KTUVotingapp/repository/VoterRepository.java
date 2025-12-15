@@ -53,6 +53,14 @@ public interface VoterRepository extends JpaRepository<Voter, Long> {
     Optional<Voter> findByFingerprintAndHasVoted(@Param("fingerprint") String fingerprint);
 
     boolean existsByFingerprintAndHasVotedTrue(String fingerprint);
+
+    Optional<Voter> findByExternalId(String externalId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT v FROM Voter v WHERE v.id = :id")
+    Optional<Voter> findByIdWithLock(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT v FROM Voter v WHERE v.externalId = :externalId")
+    Optional<Voter> findByExternalIdForUpdate(@Param("externalId") String externalId);
 }
-
-

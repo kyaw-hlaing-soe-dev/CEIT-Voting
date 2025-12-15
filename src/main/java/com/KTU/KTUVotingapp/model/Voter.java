@@ -53,6 +53,10 @@ public class Voter {
     @Column(name = "voted_at")
     private LocalDateTime votedAt;
 
+    // Optional: an external identifier (username / uuid)
+    @Column(name = "external_id", unique = true)
+    private String externalId;
+
     public Voter() {
     }
 
@@ -140,4 +144,12 @@ public class Voter {
     public void setVotedAt(LocalDateTime votedAt) {
         this.votedAt = votedAt;
     }
+
+    public Voter(String externalId) { this.externalId = externalId; }
+
+
+    public String getExternalId() { return externalId; }
+    public void setExternalId(String externalId) { this.externalId = externalId; }
+
+
 }
