@@ -149,8 +149,17 @@
                                     </div>
                                 </div>
 
+                                <!-- Candidate Number selector (1-9) -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Candidate Number</label>
+                                    <div id="numberSelector" class="number-grid mt-2" role="radiogroup" aria-label="Candidate number">
+                                        <!-- 9 radio pills inserted by JS for accessibility and to allow dynamic state -->
+                                    </div>
+                                    <p id="numberValidation" class="mt-2 text-sm text-red-600" style="display:none;"></p>
+                                </div>
+
                                 <div class="flex items-center gap-3">
-                                    <button type="submit" class="px-4 py-2 bg-gradient-to-r from-blue-700 to-indigo-600 text-white rounded-md shadow-lg">Save</button>
+                                    <button type="submit" id="btn-save" class="px-4 py-2 bg-gradient-to-r from-blue-700 to-indigo-600 text-white rounded-md shadow-lg">Save</button>
                                     <button type="button" id="btn-reset" class="px-3 py-2 rounded-md border border-gray-200">Reset</button>
                                 </div>
                             </form>
@@ -166,6 +175,7 @@
                                     <thead class="bg-gray-50">
                                         <tr>
                                             <th class="px-4 py-2 text-left text-xs text-gray-500">#</th>
+                                            <th class="px-4 py-2 text-left text-xs text-gray-500">No.</th>
                                             <th class="px-4 py-2 text-left text-xs text-gray-500">Candidate</th>
                                             <th class="px-4 py-2 text-left text-xs text-gray-500">Category</th>
                                             <th class="px-4 py-2 text-left text-xs text-gray-500">Dept</th>
@@ -219,16 +229,16 @@
 
         // Seed data (simulate GET responses)
         let mockCandidates = [
-            { id:1, name:'Arthur King', department:'History', category:'KING', votes:240, imageUrl: placeholderImage('Arthur') },
-            { id:2, name:'Beatrice Queen', department:'Arts', category:'QUEEN', votes:220, imageUrl: placeholderImage('Beatrice') },
-            { id:3, name:'Cody Prince', department:'Engineering', category:'PRINCE', votes:180, imageUrl: placeholderImage('Cody') },
-            { id:4, name:'Diana Princess', department:'Science', category:'PRINCESS', votes:205, imageUrl: placeholderImage('Diana') },
-            { id:5, name:'Eva Couple', department:'Business', category:'COUPLE', votes:150, imageUrl: placeholderImage('Eva') },
-            { id:6, name:'Frank King', department:'Math', category:'KING', votes:130, imageUrl: placeholderImage('Frank') },
-            { id:7, name:'Gina Queen', department:'Design', category:'QUEEN', votes:110, imageUrl: placeholderImage('Gina') },
-            { id:8, name:'Hugo Prince', department:'Law', category:'PRINCE', votes:95, imageUrl: placeholderImage('Hugo') },
-            { id:9, name:'Iris Princess', department:'Medicine', category:'PRINCESS', votes:87, imageUrl: placeholderImage('Iris') },
-            { id:10, name:'Jay Couple', department:'Economics', category:'COUPLE', votes:102, imageUrl: placeholderImage('Jay') }
+            { id:1, name:'Arthur King', department:'History', category:'KING', candidateNumber:1, votes:240, imageUrl: placeholderImage('Arthur') },
+            { id:2, name:'Beatrice Queen', department:'Arts', category:'QUEEN', candidateNumber:1, votes:220, imageUrl: placeholderImage('Beatrice') },
+            { id:3, name:'Cody Prince', department:'Engineering', category:'PRINCE', candidateNumber:1, votes:180, imageUrl: placeholderImage('Cody') },
+            { id:4, name:'Diana Princess', department:'Science', category:'PRINCESS', candidateNumber:1, votes:205, imageUrl: placeholderImage('Diana') },
+            { id:5, name:'Eva Couple', department:'Business', category:'COUPLE', candidateNumber:1, votes:150, imageUrl: placeholderImage('Eva') },
+            { id:6, name:'Frank King', department:'Math', category:'KING', candidateNumber:2, votes:130, imageUrl: placeholderImage('Frank') },
+            { id:7, name:'Gina Queen', department:'Design', category:'QUEEN', candidateNumber:2, votes:110, imageUrl: placeholderImage('Gina') },
+            { id:8, name:'Hugo Prince', department:'Law', category:'PRINCE', candidateNumber:2, votes:95, imageUrl: placeholderImage('Hugo') },
+            { id:9, name:'Iris Princess', department:'Medicine', category:'PRINCESS', candidateNumber:2, votes:87, imageUrl: placeholderImage('Iris') },
+            { id:10, name:'Jay Couple', department:'Economics', category:'COUPLE', candidateNumber:2, votes:102, imageUrl: placeholderImage('Jay') }
         ];
 
         let nextId = mockCandidates.length + 1;
@@ -282,6 +292,8 @@
                     candidate.name = formData.get('name') || candidate.name;
                     candidate.department = formData.get('department') || candidate.department;
                     candidate.category = formData.get('category') || candidate.category;
+                    const num = formData.get('candidateNumber');
+                    if (num) candidate.candidateNumber = parseInt(num,10);
                     const file = formData.get('image');
                     if (file && file.size){ candidate.imageUrl = await readFileAsDataURL(file); }
                 }
@@ -308,6 +320,8 @@
                     updated.name = formData.get('name') || updated.name;
                     updated.department = formData.get('department') || updated.department;
                     updated.category = formData.get('category') || updated.category;
+                    const num = formData.get('candidateNumber');
+                    if (num) updated.candidateNumber = parseInt(num,10);
                     const file = formData.get('image');
                     if (file && file.size){ updated.imageUrl = await readFileAsDataURL(file); }
                 }
@@ -658,7 +672,7 @@
                 results.forEach(res => {
                     const list = res.list || [];
                     list.forEach(c => {
-                        flat.push({ id: c.id, name: c.name, category: res.category, department: c.department || '', votes: c.voteCount || c.votes || 0, imageUrl: c.imageUrl || '' });
+                        flat.push({ id: c.id, name: c.name, category: res.category, department: c.department || '', candidateNumber: c.candidateNumber || c.number || null, votes: c.voteCount || c.votes || 0, imageUrl: c.imageUrl || '' });
                     });
                 });
 
@@ -670,6 +684,7 @@
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td class='px-4 py-3'>${i+1}</td>
+                        <td class='px-4 py-3 font-medium'>${c.candidateNumber || ''}</td>
                         <td class='px-4 py-3 flex items-center gap-3'><img src='${c.imageUrl || ''}' class='thumbnail' alt=''/><div><div class='font-medium'>${c.name}</div><div class='text-xs text-gray-500'>ID ${c.id}</div></div></td>
                         <td class='px-4 py-3'>${c.category}</td>
                         <td class='px-4 py-3'>${c.department || ''}</td>
@@ -712,6 +727,8 @@
             deptInput.value = c.department || '';
             imagePreview.src = c.imageUrl || '';
             imageFilename.textContent = '';
+            // set candidate number when editing
+            setSelectedNumber(c.candidateNumber ?? null);
             showView('manage');
          }
 
@@ -762,14 +779,88 @@
             imageFilename.textContent = '';
         }
 
+        // Number selector helpers
+        const numberSelector = document.getElementById('numberSelector');
+        const numberValidation = document.getElementById('numberValidation');
+        const saveButton = document.getElementById('btn-save');
+
+        // build number pills 1..9
+        function buildNumberSelector(){
+            if (!numberSelector) return;
+            numberSelector.innerHTML = '';
+            for (let i=1;i<=10;i++){
+                const id = 'num-'+i;
+                const wrapper = document.createElement('label');
+                wrapper.className = 'number-pill';
+                wrapper.innerHTML = `<input type="radio" name="candidate-number" value="${i}" id="${id}"><span>${i}</span>`;
+                numberSelector.appendChild(wrapper);
+            }
+            // attach change handler
+            numberSelector.querySelectorAll('input[name="candidate-number"]').forEach(r => r.addEventListener('change', onNumberChange));
+        }
+
+        function onNumberChange(){
+            // client-side: ensure same category doesn't already have this number
+            const selected = getSelectedNumber();
+            const curId = candidateIdInput.value ? String(candidateIdInput.value) : null;
+            const cat = categorySelect.value;
+            let conflict = false;
+            if (selected && categories){
+                for (const c of candidatesCache || []){
+                    if (!c || !c.id) continue;
+                    if (String(c.category) === String(cat) && String(c.candidateNumber) === String(selected) && String(c.id) !== String(curId)){
+                        conflict = true; break;
+                    }
+                }
+            }
+            if (conflict){
+                numberValidation.style.display = '';
+                numberValidation.textContent = 'Another candidate in this category is already using this number.';
+                saveButton.disabled = true;
+            } else {
+                numberValidation.style.display = 'none';
+                numberValidation.textContent = '';
+                saveButton.disabled = false;
+            }
+        }
+
+        function setSelectedNumber(num){
+            if (!numberSelector) return;
+            const radios = numberSelector.querySelectorAll('input[name="candidate-number"]');
+            radios.forEach(r => { r.checked = false; });
+            if (num == null) return;
+            const target = numberSelector.querySelector(`input[value='${num}']`);
+            if (target) target.checked = true;
+            // trigger validation
+            onNumberChange();
+        }
+
+        function getSelectedNumber(){
+            if (!numberSelector) return null;
+            const sel = numberSelector.querySelector('input[name="candidate-number"]:checked');
+            return sel ? parseInt(sel.value,10) : null;
+        }
+
+        // build selector early
+        buildNumberSelector();
+
         // Submit create/update
         async function onSubmitCandidate(ev){
             ev.preventDefault();
             const id = candidateIdInput.value ? parseInt(candidateIdInput.value,10) : null;
+            // ensure candidate number selected
+            const selNum = getSelectedNumber();
+            if (selNum == null){
+                numberValidation.style.display = '';
+                numberValidation.textContent = 'Candidate number is required (1–10).';
+                return;
+            }
             const formData = new FormData();
             formData.append('name', nameInput.value.trim());
             formData.append('department', deptInput.value.trim());
             formData.append('category', categorySelect.value);
+            // include candidateNumber if selected
+            if (selNum != null) formData.append('candidateNumber', String(selNum));
             if (imageInput.files && imageInput.files[0]) formData.append('image', imageInput.files[0]);
 
             console.group('FormData');
@@ -799,13 +890,19 @@
                     const adminPin = ADMIN_PIN;
                     if (id){
                         const res = await fetch(`/api/admin/candidates/${id}?adminPin=${encodeURIComponent(adminPin)}`, { method: 'PUT', body: formData, credentials: 'same-origin' });
-                        if (!res.ok) throw new Error('Status ' + res.status);
+                        if (!res.ok) {
+                            const text = await res.text().catch(()=>null);
+                            throw new Error(text || ('Status ' + res.status));
+                        }
                         const payload = await res.json();
                         console.log('Admin PUT response', payload);
                         showToast('Updated');
                     } else {
                         const res = await fetch(`/api/admin/candidates?adminPin=${encodeURIComponent(adminPin)}`, { method: 'POST', body: formData, credentials: 'same-origin' });
-                        if (!res.ok) throw new Error('Status ' + res.status);
+                        if (!res.ok) {
+                            const text = await res.text().catch(()=>null);
+                            throw new Error(text || ('Status ' + res.status));
+                        }
                         const payload = await res.json();
                         console.log('Admin POST response', payload);
                         showToast('Created');

@@ -99,6 +99,13 @@ public class CandidateService {
     @CacheEvict(value = {"results", "candidates"}, allEntries = true)
     public Candidate createCandidateTransactional(Candidate candidate) {
          validateRankingConflictForCreate(candidate.getCategory(), candidate.getCandidateNumber());
+         // Ensure the candidateNumber is unique within the same category
+         if (candidate.getCandidateNumber() != null) {
+             var existing = candidateRepository.findByCategoryAndCandidateNumber(candidate.getCategory(), candidate.getCandidateNumber());
+             if (existing.isPresent()) {
+                 throw new RuntimeException("Candidate number " + candidate.getCandidateNumber() + " is already used in category " + candidate.getCategory());
+             }
+         }
          return candidateRepository.save(candidate);
     }
 
@@ -117,6 +124,11 @@ public class CandidateService {
             Iterable<Category> conflicting = conflictingPair(newCategory);
             if (candidateRepository.existsByCategoryInAndCandidateNumberExcludingId(conflicting, newNumber, id)) {
                 throw new RankingConflictException("Rank " + newNumber + " is already taken in the paired category for " + newCategory);
+            }
+            // also ensure uniqueness within the same category (excluding current id)
+            var found = candidateRepository.findByCategoryAndCandidateNumber(newCategory, newNumber);
+            if (found.isPresent() && !found.get().getId().equals(id)) {
+                throw new RuntimeException("Candidate number " + newNumber + " is already used in category " + newCategory);
             }
         }
 
