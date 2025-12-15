@@ -17,6 +17,12 @@
     <style>
         .thumbnail { width:44px; height:44px; object-fit:cover; border-radius:9999px; }
         .table-scroll { max-height:420px; overflow:auto; }
+        .number-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.5rem; }
+        .number-pill { position:relative; }
+        .number-pill input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+        .number-pill span { display:block; padding:0.5rem 0; border:1px solid #e5e7eb; border-radius:0.75rem; text-align:center; font-weight:600; color:#4b5563; background:#fff; transition:all 0.15s ease; }
+        .number-pill input:checked + span { border-color:#4f46e5; background:#eef2ff; color:#312e81; box-shadow:0 0 0 1px #4f46e5 inset; }
+        .number-pill input:disabled + span { opacity:0.3; cursor:not-allowed; }
     </style>
 
 </head>
@@ -53,9 +59,35 @@
 
             <!-- Live Results View -->
             <section id="view-live" class="hidden">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <!-- category cards inserted here -->
+                <div id="statsBar" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl p-4 shadow-lg flex items-center justify-between">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-white/70">Total Voters</p>
+                            <p class="text-3xl font-bold" data-total-voters>0</p>
+                            <p class="text-sm text-white/70">unique participants</p>
+                        </div>
+                        <div class="text-4xl">👥</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 shadow-lg flex items-center justify-between border border-gray-100">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Total Votes</p>
+                            <p class="text-3xl font-bold text-gray-800" data-total-votes>0</p>
+                            <p class="text-sm text-gray-500">all categories</p>
+                        </div>
+                        <div class="text-4xl text-indigo-500">🗳️</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 shadow-lg border border-gray-100 hidden md:flex items-center justify-between">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Last Updated</p>
+                            <p class="text-lg font-semibold text-gray-800" id="lastUpdated">--</p>
+                            <p class="text-sm text-gray-500">auto refresh</p>
+                        </div>
+                        <div class="text-3xl text-indigo-500">⏱️</div>
+                    </div>
                 </div>
+                 <div id="live-category-grid" class="grid grid-cols-1 md-grid-cols-2 lg-grid-cols-3 gap-4">
+                     <!-- category cards inserted here -->
+                 </div>
             </section>
 
             <!-- Candidate Management View -->
@@ -501,26 +533,47 @@
 
         // Render Live Results: create 5 category tables showing Top 5 by votes
         async function renderLiveResults(){
-            const container = viewLive.querySelector('div.grid');
+            const container = document.getElementById('live-category-grid');
             container.innerHTML = '';
             try{
-                // Use /api/results/all which returns an array of ResultDTO
-                const res = await fetch('/api/results/all', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
-                if (!res.ok) throw new Error('Status ' + res.status);
-                const payload = await res.json();
+                const [statsRes, resultsRes] = await Promise.all([
+                    fetch(`/api/admin/results?adminPin=${encodeURIComponent(ADMIN_PIN)}`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } }),
+                    fetch('/api/results/all', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                ]);
+                if (!statsRes.ok) throw new Error('Stats status ' + statsRes.status);
+                if (!resultsRes.ok) throw new Error('Results status ' + resultsRes.status);
+                const statsPayload = await statsRes.json();
+                const resultsPayload = await resultsRes.json();
                 document.getElementById('fetchError').style.display = 'none';
-                const allResults = payload || [];
+                const stats = statsPayload && statsPayload.stats;
+                const statsBar = document.getElementById('statsBar');
+                if (statsBar && stats) {
+                    statsBar.querySelector('[data-total-voters]').textContent = stats.totalVoters ?? 0;
+                    statsBar.querySelector('[data-total-votes]').textContent = stats.totalVotes ?? 0;
+                }
+                const lastUpdatedEl = document.getElementById('lastUpdated');
+                if (lastUpdatedEl) {
+                    lastUpdatedEl.textContent = new Date().toLocaleTimeString();
+                }
+                const allResults = Array.isArray(resultsPayload) ? resultsPayload : [];
 
-                // build grouped map: category -> candidates array
-                const grouped = {};
-                (categories || []).forEach(c => grouped[c]=[]);
-                allResults.forEach(r => {
-                    const catKey = String(r.category);
-                    grouped[catKey] = (r.candidates || []).map(ci => ({ id: ci.id, name: ci.name || ci.name, department: ci.department || '', votes: ci.voteCount || ci.voteCount || 0, imageUrl: ci.imageUrl || ci.imageUrl }));
+                 // build grouped map: category -> candidates array
+                 const grouped = {};
+                 (categories || []).forEach(c => grouped[c]=[]);
+                allResults.forEach(result => {
+                    const catKey = String(result.category);
+                    const candList = Array.isArray(result.candidates) ? result.candidates : [];
+                    grouped[catKey] = candList.map(ci => ({
+                        id: ci.id,
+                        name: ci.name,
+                        department: ci.department || '',
+                        votes: ci.voteCount || 0,
+                        imageUrl: ci.imageUrl || ''
+                    }));
                 });
 
-                (categories || []).forEach(cat => {
-                    const arr = (grouped[cat]||[]).slice().sort((a,b)=> b.votes - a.votes).slice(0,5);
+                 (categories || []).forEach(cat => {
+                     const arr = (grouped[cat]||[]).slice().sort((a,b)=> b.votes - a.votes).slice(0,5);
 
                     // map category name to CSS class defined in styles.css
                     const catClassMap = {
@@ -679,6 +732,7 @@
             nameInput.value = '';
             categorySelect.value = categories[0];
             deptInput.value = '';
+            setSelectedNumber(null);
             imageInput.value = '';
             imagePreview.src = '';
             imageFilename.textContent = '';

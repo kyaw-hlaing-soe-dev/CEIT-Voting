@@ -18,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -103,6 +106,8 @@ public class VotingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "You have already voted in this category");
         }
+
+        enforcePairedConstraintWithExistingVote(voter, request.getCategory(), request.getCandidateNumber());
 
         // Step 4: Get candidate
         Candidate candidate = candidateRepository.findByCategoryAndCandidateNumber(
@@ -197,6 +202,8 @@ public class VotingService {
                 "This device has already submitted votes");
         }
 
+        validatePairedSelections(request.getVotes());
+
         // Step 3: Validate all votes before processing
         for (BulkVoteRequest.VoteItem voteItem : request.getVotes()) {
             // Check if already voted in this category
@@ -204,6 +211,8 @@ public class VotingService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "You have already voted in category: " + voteItem.getCategory());
             }
+
+            enforcePairedConstraintWithExistingVote(voter, voteItem.getCategory(), voteItem.getCandidateNumber());
 
             // Validate candidate exists
             candidateRepository.findByCategoryAndCandidateNumber(
@@ -219,6 +228,8 @@ public class VotingService {
                 Candidate candidate = candidateRepository.findByCategoryAndCandidateNumber(
                         voteItem.getCategory(), voteItem.getCandidateNumber())
                         .orElseThrow();
+
+                enforcePairedConstraintWithExistingVote(voter, voteItem.getCategory(), voteItem.getCandidateNumber());
 
                 Vote vote = new Vote(voter, candidate, voteItem.getCategory());
                 voteRepository.save(vote);
@@ -313,5 +324,55 @@ public class VotingService {
             return false;
         }
         return voterRepository.existsByIpAddressAndHasVotedTrue(ipAddress);
+    }
+
+    private void enforcePairedConstraintWithExistingVote(Voter voter, Category attemptedCategory, Integer candidateNumber) {
+        if (candidateNumber == null) {
+            return;
+        }
+        Category pairedCategory = attemptedCategory.paired();
+        if (pairedCategory == attemptedCategory) {
+            return;
+        }
+        voteRepository.findByVoterAndCategory(voter, pairedCategory)
+                .filter(existing -> existing.getCandidateNumber() != null
+                        && existing.getCandidateNumber().equals(candidateNumber))
+                .ifPresent(existing -> {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        buildPairingErrorMessage(existing.getCategory(), attemptedCategory, candidateNumber));
+                });
+    }
+
+    private void validatePairedSelections(List<BulkVoteRequest.VoteItem> votes) {
+        if (votes == null || votes.isEmpty()) {
+            return;
+        }
+        Map<Category, Integer> selections = new EnumMap<>(Category.class);
+        for (BulkVoteRequest.VoteItem voteItem : votes) {
+            Category category = voteItem.getCategory();
+            Integer candidateNumber = voteItem.getCandidateNumber();
+            if (category == null || candidateNumber == null) {
+                continue;
+            }
+            Category pairedCategory = category.paired();
+            if (pairedCategory != category) {
+                Integer pairedSelection = selections.get(pairedCategory);
+                if (pairedSelection != null && pairedSelection.equals(candidateNumber)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        buildPairingErrorMessage(pairedCategory, category, candidateNumber));
+                }
+            }
+            selections.put(category, candidateNumber);
+        }
+    }
+
+    private String buildPairingErrorMessage(Category existingCategory, Category attemptedCategory, Integer candidateNumber) {
+        return String.format(
+                "You already voted Candidate No.%d for %s. You cannot choose Candidate No.%d for %s.",
+                candidateNumber,
+                existingCategory.displayName(),
+                candidateNumber,
+                attemptedCategory.displayName()
+        );
     }
 }

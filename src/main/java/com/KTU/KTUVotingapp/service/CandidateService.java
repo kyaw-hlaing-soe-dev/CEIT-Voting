@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.function.Consumer;
 
 @Service
 @Transactional(readOnly = true)
@@ -97,15 +98,14 @@ public class CandidateService {
     @Transactional(isolation = Isolation.SERIALIZABLE)
     @CacheEvict(value = {"results", "candidates"}, allEntries = true)
     public Candidate createCandidateTransactional(Candidate candidate) {
-        // Validate again inside transaction to prevent race
-        validateRankingConflictForCreate(candidate.getCategory(), candidate.getCandidateNumber());
-        return candidateRepository.save(candidate);
+         validateRankingConflictForCreate(candidate.getCategory(), candidate.getCandidateNumber());
+         return candidateRepository.save(candidate);
     }
 
     // Update candidate - handle editing existing selections: if candidateNumber or category changed, validate conflicts
     @Transactional(isolation = Isolation.SERIALIZABLE)
     @CacheEvict(value = {"results", "candidates"}, allEntries = true)
-    public Candidate updateCandidateTransactional(Long id, CandidateForm form, java.util.function.Consumer<Candidate> imageUpdater) {
+    public Candidate updateCandidateTransactional(Long id, CandidateForm form, Consumer<Candidate> imageUpdater) {
         Candidate existing = getCandidateById(id);
         Category newCategory = form.getCategory() != null ? form.getCategory() : existing.getCategory();
         Integer newNumber = form.getCandidateNumber() != null ? form.getCandidateNumber() : existing.getCandidateNumber();

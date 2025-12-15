@@ -63,4 +63,6 @@ public interface VoterRepository extends JpaRepository<Voter, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT v FROM Voter v WHERE v.externalId = :externalId")
     Optional<Voter> findByExternalIdForUpdate(@Param("externalId") String externalId);
+
+    long countByHasVotedTrue();
 }

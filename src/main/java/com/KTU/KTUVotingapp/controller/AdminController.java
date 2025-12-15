@@ -19,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -101,7 +102,7 @@ public class AdminController {
      * GET /api/admin/results?adminPin=99999
      */
     @GetMapping(value = "/results", params = "adminPin")
-    public ResponseEntity<java.util.List<ResultDTO.CandidateResultDTO>> getLiveAdminResults(@RequestParam("adminPin") String pin) {
+    public ResponseEntity<Map<String, Object>> getLiveAdminResults(@RequestParam("adminPin") String pin) {
         if (pin == null || !pin.equals(adminPin)) {
             return ResponseEntity.status(403).build();
         }
@@ -112,7 +113,13 @@ public class AdminController {
                 .sorted(java.util.Comparator.comparingLong(ResultDTO.CandidateResultDTO::getVoteCount).reversed())
                 .collect(java.util.stream.Collectors.toList());
 
-        return ResponseEntity.ok(candidates);
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("candidates", candidates);
+        payload.put("stats", Map.of(
+                "totalVotes", resultService.getTotalVotesCast(),
+                "totalVoters", resultService.getTotalVoters()
+        ));
+        return ResponseEntity.ok(payload);
     }
 
     @GetMapping("/candidates")

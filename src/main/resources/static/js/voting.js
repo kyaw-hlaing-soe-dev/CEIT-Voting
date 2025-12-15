@@ -291,31 +291,18 @@
     PRINCESS: 'QUEEN'
   };
 
-  function onSelectionChange(event) {
-    const el = event.target;
-    const category = el.dataset.category;
-    const value = el.value; // candidate number as string
+  function enforcePairedRadios(category, selectedNumber) {
     const paired = pairing[category];
-    if (!paired) return;
-
-    // disable same candidate option in paired category select/radios
-    // handle <select>
-    const pairedSelect = document.querySelector(`[data-category="${paired}"]`);
-    if (pairedSelect && pairedSelect.tagName === 'SELECT') {
-      for (const opt of pairedSelect.options) {
-        opt.disabled = (opt.value === value);
-      }
-    }
-
-    // handle radio groups
-    const pairedRadios = document.querySelectorAll(`input[type="radio"][data-category="${paired}"]`);
-    pairedRadios.forEach(r => {
-      if (r.value === value) {
+    if (!paired || selectedNumber == null) return;
+    const radios = document.querySelectorAll(`input[type="radio"][data-category="${paired}"]`);
+    radios.forEach(r => {
+      if (r.value === String(selectedNumber)) {
         r.disabled = true;
-        // if currently selected, show client error and unselect
         if (r.checked) {
           r.checked = false;
-          alert(`You already voted Candidate No.${value} for ${paired}. You cannot choose Candidate No.${value} for ${category}.`);
+          const label = r.closest('.radio-option');
+          if (label) label.classList.remove('selected');
+          alert(`You already voted Candidate No.${selectedNumber} for ${category}. You cannot choose Candidate No.${selectedNumber} for ${paired}.`);
         }
       } else {
         r.disabled = false;
@@ -323,11 +310,19 @@
     });
   }
 
-  // attach listeners to selects and radios
-  document.querySelectorAll('select[data-category], input[type="radio"][data-category]').forEach(el => {
-    el.addEventListener('change', onSelectionChange);
-  });
+  function onSelectionChange(event) {
+    const el = event.target;
+    const category = el.dataset.category;
+    const value = el.value;
+    enforcePairedRadios(category, value);
+  }
 
+  document.addEventListener('change', (event) => {
+    const target = event.target;
+    if (target.matches('input[type="radio"][data-category]') || target.matches('select[data-category]')) {
+      onSelectionChange(event);
+    }
+  });
 
   // --- Inject CSS styles ---
   function injectStyles() {
@@ -555,6 +550,7 @@
       layoutOptions(container);
 
       container.querySelectorAll('input[name="selection"]').forEach((input) => {
+        input.setAttribute('data-category', category);
         input.addEventListener('change', (evt) => {
           selectedNumber = parseInt(evt.target.value, 10);
           const cand = candidates.find(c => c.candidateNumber === selectedNumber);
@@ -574,6 +570,7 @@
             updateCandidateDisplay(cand);
           }
           updateNextButton();
+          enforcePairedRadios(category, selectedNumber);
         });
       });
     }
@@ -592,6 +589,7 @@
           if (labelEl) labelEl.classList.add('selected');
         }
         updateCandidateDisplay(saved);
+        enforcePairedRadios(category, selectedNumber);
       } else selectedNumber = null;
     }
 

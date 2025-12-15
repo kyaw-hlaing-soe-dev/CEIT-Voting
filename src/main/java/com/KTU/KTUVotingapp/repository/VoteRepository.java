@@ -34,5 +34,6 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
     @Query("SELECT COUNT(v) FROM Vote v WHERE v.candidate.id = :candidateId")
     long countByCandidateId(@Param("candidateId") Long candidateId);
 
-
+    @Query("SELECT COUNT(DISTINCT v.voter.id) FROM Vote v")
+    long countDistinctVoters();
 }
