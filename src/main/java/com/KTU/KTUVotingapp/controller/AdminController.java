@@ -2,6 +2,7 @@ package com.KTU.KTUVotingapp.controller;
 
 import com.KTU.KTUVotingapp.dto.ResultDTO;
 import com.KTU.KTUVotingapp.exception.ResourceNotFoundException;
+import com.KTU.KTUVotingapp.exception.RankingConflictException;
 import com.KTU.KTUVotingapp.model.Candidate;
 import com.KTU.KTUVotingapp.model.Category;
 import com.KTU.KTUVotingapp.service.ResultService;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -41,6 +43,18 @@ public class AdminController {
     private final CandidateService candidateService;
 
     private final AdminActionAuditRepository auditRepository;
+
+    private static final int MIN_CANDIDATE_NUMBER = 1;
+    private static final int MAX_CANDIDATE_NUMBER = 10;
+
+    private void validateCandidateNumberOrThrow(Integer number) {
+        if (number == null) {
+            throw new IllegalArgumentException("Candidate number is required");
+        }
+        if (number < MIN_CANDIDATE_NUMBER || number > MAX_CANDIDATE_NUMBER) {
+            throw new IllegalArgumentException("Candidate number must be between " + MIN_CANDIDATE_NUMBER + " and " + MAX_CANDIDATE_NUMBER);
+        }
+    }
 
     public AdminController(ResultService resultService, CandidateRepository candidateRepository, ImageStorageService imageStorageService, CandidateService candidateService, AdminActionAuditRepository auditRepository) {
         this.resultService = resultService;
@@ -151,14 +165,28 @@ public class AdminController {
         candidate.setImageUrl(dto.getImageUrl());
         candidate.setVoteCount(dto.getVoteCount() != null ? dto.getVoteCount() : 0L);
 
-        Candidate saved = candidateService.createCandidateTransactional(candidate);
-        candidateService.evictCaches();
+        try {
+            validateCandidateNumberOrThrow(dto.getCandidateNumber());
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", "INVALID_NUMBER", "message", ex.getMessage()));
+        }
 
-        com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
-                saved.getId(), saved.getCategory(), saved.getCandidateNumber(), saved.getName(), saved.getDepartment(), saved.getImageUrl(), saved.getVoteCount()
-        );
+        try {
+            Candidate saved = candidateService.createCandidateTransactional(candidate);
+            candidateService.evictCaches();
 
-        return ResponseEntity.ok(response);
+            com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
+                    saved.getId(), saved.getCategory(), saved.getCandidateNumber(), saved.getName(), saved.getDepartment(), saved.getImageUrl(), saved.getVoteCount()
+            );
+
+            return ResponseEntity.ok(response);
+        } catch (RankingConflictException rce) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","RANK_CONFLICT","message", rce.getMessage()));
+        } catch (DataIntegrityViolationException dive) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","CONFLICT","message","Candidate number already in use in this category"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error","CREATE_FAILED","message", e.getMessage()));
+        }
     }
 
     // New: multipart/form-data create endpoint (accepts file optionally)
@@ -186,7 +214,19 @@ public class AdminController {
             }
 
             // Use transactional service which will validate and use SERIALIZABLE isolation
-            com.KTU.KTUVotingapp.model.Candidate saved = candidateService.createCandidateTransactional(candidate);
+            try {
+                validateCandidateNumberOrThrow(candidate.getCandidateNumber());
+            } catch (IllegalArgumentException ex) {
+                return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error","INVALID_NUMBER","message",ex.getMessage()));
+            }
+            com.KTU.KTUVotingapp.model.Candidate saved = null;
+            try {
+                saved = candidateService.createCandidateTransactional(candidate);
+            } catch (RankingConflictException rce) {
+                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","RANK_CONFLICT","message", rce.getMessage()));
+            } catch (DataIntegrityViolationException dive) {
+                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","CONFLICT","message","Candidate number already in use in this category"));
+            }
 
             com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
                     saved.getId(), saved.getCategory(), saved.getCandidateNumber(), saved.getName(), saved.getDepartment(), saved.getImageUrl(), saved.getVoteCount()
@@ -230,21 +270,30 @@ public class AdminController {
         form.setVoteCount(dto.getVoteCount());
         form.setImageUrl(dto.getImageUrl());
 
-        Candidate saved = candidateService.updateCandidateTransactional(id, form, existing -> {
-            if (dto.getImageUrl() != null) {
-                existing.setImageUrl(dto.getImageUrl());
-            }
-        });
-        candidateService.evictCaches();
+        try {
+            if (dto.getCandidateNumber() != null) validateCandidateNumberOrThrow(dto.getCandidateNumber());
+            Candidate saved = candidateService.updateCandidateTransactional(id, form, existing -> {
+                if (dto.getImageUrl() != null) {
+                    existing.setImageUrl(dto.getImageUrl());
+                }
+            });
+            candidateService.evictCaches();
 
-        com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
-                saved.getId(), saved.getCategory(), saved.getCandidateNumber(), saved.getName(), saved.getDepartment(), saved.getImageUrl(), saved.getVoteCount()
-        );
-        return ResponseEntity.ok(response);
+            com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
+                    saved.getId(), saved.getCategory(), saved.getCandidateNumber(), saved.getName(), saved.getDepartment(), saved.getImageUrl(), saved.getVoteCount()
+            );
+            return ResponseEntity.ok(response);
+        } catch (RankingConflictException rce) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","RANK_CONFLICT","message", rce.getMessage()));
+        } catch (DataIntegrityViolationException dive) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","CONFLICT","message","Candidate number already in use in this category"));
+        } catch (IllegalArgumentException iae) {
+            return ResponseEntity.badRequest().body(Map.of("error","INVALID_NUMBER","message", iae.getMessage()));
+        }
     }
 
     // New: multipart/form-data update endpoint (accepts file optionally)
-    @PutMapping(value = "/candidates/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, params = "adminPin")
+    @RequestMapping(value = "/candidates/{id}", method = {org.springframework.web.bind.annotation.RequestMethod.PUT, org.springframework.web.bind.annotation.RequestMethod.POST}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE, params = "adminPin")
     public org.springframework.http.ResponseEntity<?> updateCandidateMultipart(@RequestParam("adminPin") String pin, @PathVariable Long id,
                                                                                  @ModelAttribute CandidateForm form) {
         if (pin == null || !pin.equals(adminPin)) {
@@ -266,13 +315,22 @@ public class AdminController {
                 }
             };
 
-            com.KTU.KTUVotingapp.model.Candidate saved = candidateService.updateCandidateTransactional(id, form, imageUpdater);
+            try {
+                if (form.getCandidateNumber() != null) validateCandidateNumberOrThrow(form.getCandidateNumber());
+                com.KTU.KTUVotingapp.model.Candidate saved = candidateService.updateCandidateTransactional(id, form, imageUpdater);
 
-            com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
-                    saved.getId(), saved.getCategory(), saved.getCandidateNumber(), saved.getName(), saved.getDepartment(), saved.getImageUrl(), saved.getVoteCount()
-            );
+                com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
+                        saved.getId(), saved.getCategory(), saved.getCandidateNumber(), saved.getName(), saved.getDepartment(), saved.getImageUrl(), saved.getVoteCount()
+                );
 
-            return org.springframework.http.ResponseEntity.ok(response);
+                return org.springframework.http.ResponseEntity.ok(response);
+            } catch (RankingConflictException rce) {
+                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","RANK_CONFLICT","message", rce.getMessage()));
+            } catch (DataIntegrityViolationException dive) {
+                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","CONFLICT","message","Candidate number already in use in this category"));
+            } catch (IllegalArgumentException iae) {
+                return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error","INVALID_NUMBER","message", iae.getMessage()));
+            }
         } catch (Exception e) {
             return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

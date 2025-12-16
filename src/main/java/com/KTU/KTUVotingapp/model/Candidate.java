@@ -1,10 +1,14 @@
 package com.KTU.KTUVotingapp.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 
 @Entity
 @Table(name = "candidates", indexes = {
     @Index(name = "idx_category_number", columnList = "category, candidate_number")
+}, uniqueConstraints = {
+    @UniqueConstraint(name = "uk_category_candidate_number", columnNames = {"category", "candidate_number"})
 })
 public class Candidate {
 
@@ -16,6 +20,7 @@ public class Candidate {
     @Column(nullable = false, length = 20)
     private Category category;
 
+    // Candidate number shown to voters (1..10). Unique within the same category.
     @Column(nullable = false, name = "candidate_number")
     private Integer candidateNumber;
 
@@ -99,4 +104,3 @@ public class Candidate {
         this.voteCount++;
     }
 }
-
