@@ -23,6 +23,69 @@
         .number-pill span { display:block; padding:0.5rem 0; border:1px solid #e5e7eb; border-radius:0.75rem; text-align:center; font-weight:600; color:#4b5563; background:#fff; transition:all 0.15s ease; }
         .number-pill input:checked + span { border-color:#4f46e5; background:#eef2ff; color:#312e81; box-shadow:0 0 0 1px #4f46e5 inset; }
         .number-pill input:disabled + span { opacity:0.3; cursor:not-allowed; }
+        
+        /* ===== RESPONSIVE TABLE LAYOUT - CSS GRID APPROACH ===== */
+        /* 
+         * WHY CSS GRID:
+         * - Better for two-dimensional layouts (rows AND columns)
+         * - Automatic wrapping with grid-template-columns
+         * - Easier gap control between items
+         * - Better responsive behavior with media queries
+         * - More predictable than Flexbox for multi-row layouts
+         */
+        
+        /* Mobile-first: Stack tables vertically by default */
+        #live-category-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        /* Tablet: 2 columns side by side */
+        @media (min-width: 768px) {
+            #live-category-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1.5rem;
+            }
+        }
+        
+        /* Desktop: Still 2 columns for optimal readability */
+        @media (min-width: 1024px) {
+            #live-category-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 2rem;
+            }
+        }
+        
+        /* Large Desktop: Optional 3 columns if more space is needed */
+        @media (min-width: 1536px) {
+            #live-category-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 2rem;
+            }
+        }
+        
+        /* Ensure table cards have stable width and don't overflow */
+        #live-category-grid > div {
+            min-width: 0; /* Crucial: allows grid items to shrink below content size */
+            box-sizing: border-box;
+        }
+        
+        /* Table responsive behavior */
+        #live-category-grid table {
+            width: 100%;
+            table-layout: fixed; /* Prevents tables from breaking layout */
+            word-wrap: break-word;
+        }
+        
+        /* Ensure scrollable container doesn't break grid */
+        .table-scroll {
+            overflow-x: auto;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        }
     </style>
 
 </head>
@@ -85,32 +148,17 @@
                         <div class="text-3xl text-indigo-500">⏱️</div>
                     </div>
                 </div>
-                 <div id="live-category-grid" class="grid grid-cols-1 md-grid-cols-2 lg-grid-cols-3 gap-4">
-                     <section class="table-duo">
-                         <article class="data-card">
-                             <header class="data-card__header">
-                                 <h3>Live Category Results</h3>
-                                 <span class="badge badge--live">Live</span>
-                             </header>
-                             <div class="table-scroll">
-                                 <table class="data-table" id="live-results-table">
-                                     <!-- existing table head/body -->
-                                 </table>
-                             </div>
-                         </article>
-
-                         <article class="data-card">
-                             <header class="data-card__header">
-                                 <h3>Audit Trail</h3>
-                                 <span class="badge badge--muted">Recent</span>
-                             </header>
-                             <div class="table-scroll">
-                                 <table class="data-table" id="audit-table">
-                                     <!-- existing table head/body -->
-                                 </table>
-                             </div>
-                         </article>
-                     </section>
+                 <!-- 
+                   RESPONSIVE TABLE LAYOUT CONTAINER
+                   Using CSS Grid for optimal responsive behavior:
+                   - Mobile: 1 column (stacked)
+                   - Tablet/Desktop: 2 columns side-by-side
+                   - Large screens: 3 columns (optional)
+                   
+                   Tables are dynamically populated by JavaScript (see renderLiveResults function)
+                 -->
+                 <div id="live-category-grid">
+                     <!-- Tables for KING, QUEEN, PRINCE, PRINCESS, COUPLE will be inserted here by JS -->
                  </div>
             </section>
 
