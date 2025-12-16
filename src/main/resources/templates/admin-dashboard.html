@@ -591,8 +591,15 @@
                 }
                 const payload = await res.json();
                 showToast(payload.message || 'Votes reset');
-                // Force a full page reload so we always see fresh data and assets
-                window.location.reload();
+
+                // Immediately reflect reset totals in UI
+                const totalVotersEl = document.querySelector('[data-total-voters]');
+                const totalVotesEl = document.querySelector('[data-total-votes]');
+                if (totalVotersEl) totalVotersEl.textContent = '0';
+                if (totalVotesEl) totalVotesEl.textContent = '0';
+
+                // Refresh dashboard views to pull fresh server data
+                await refreshAll();
             } catch(err){
                 console.error('Failed to reset votes', err);
                 const fe = document.getElementById('fetchError');
