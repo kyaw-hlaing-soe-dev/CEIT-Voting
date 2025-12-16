@@ -123,6 +123,8 @@
                             <h3 class="font-semibold mb-3">Add / Edit Candidate</h3>
                             <form id="candidate-form" class="space-y-4" enctype="multipart/form-data">
                                 <input type="hidden" id="candidate-id" />
+                                <!-- Preserve existing image URL when editing and no new file is chosen -->
+                                <input type="hidden" id="candidate-image-url" name="imageUrl" />
                                 <div>
                                     <label for="candidate-name" class="block text-sm font-medium text-gray-700">Name</label>
                                     <input id="candidate-name" type="text" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm p-2" required />
@@ -726,6 +728,8 @@
             categorySelect.value = c.category;
             deptInput.value = c.department || '';
             imagePreview.src = c.imageUrl || '';
+            // set hidden imageUrl so backend knows existing image when no new file uploaded
+            document.getElementById('candidate-image-url').value = c.imageUrl || '';
             imageFilename.textContent = '';
             // set candidate number when editing
             setSelectedNumber(c.candidateNumber ?? null);
@@ -845,29 +849,35 @@
         buildNumberSelector();
 
         // Submit create/update
-        async function onSubmitCandidate(ev){
-            ev.preventDefault();
-            const id = candidateIdInput.value ? parseInt(candidateIdInput.value,10) : null;
-            // ensure candidate number selected
-            const selNum = getSelectedNumber();
-            if (selNum == null){
-                numberValidation.style.display = '';
-                numberValidation.textContent = 'Candidate number is required (1–10).';
-                return;
+         async function onSubmitCandidate(ev){
+             ev.preventDefault();
+             const id = candidateIdInput.value ? parseInt(candidateIdInput.value,10) : null;
+             // ensure candidate number selected
+             const selNum = getSelectedNumber();
+             if (selNum == null){
+                 numberValidation.style.display = '';
+                 numberValidation.textContent = 'Candidate number is required (1–10).';
+                 return;
+             }
+             const formData = new FormData();
+             formData.append('name', nameInput.value.trim());
+             formData.append('department', deptInput.value.trim());
+             formData.append('category', categorySelect.value);
+             // include candidateNumber if selected
+             if (selNum != null) formData.append('candidateNumber', String(selNum));
+            if (imageInput.files && imageInput.files[0]) {
+                formData.append('image', imageInput.files[0]);
+            } else {
+                // preserve existing imageUrl when editing and no new file chosen
+                const existingUrl = document.getElementById('candidate-image-url').value;
+                if (existingUrl) formData.append('imageUrl', existingUrl);
             }
-            const formData = new FormData();
-            formData.append('name', nameInput.value.trim());
-            formData.append('department', deptInput.value.trim());
-            formData.append('category', categorySelect.value);
-            // include candidateNumber if selected
-            if (selNum != null) formData.append('candidateNumber', String(selNum));
-            if (imageInput.files && imageInput.files[0]) formData.append('image', imageInput.files[0]);
 
-            console.group('FormData');
-            for (let pair of formData.entries()) console.log(pair[0], pair[1]);
-            console.groupEnd();
+             console.group('FormData');
+             for (let pair of formData.entries()) console.log(pair[0], pair[1]);
+             console.groupEnd();
 
-            try{
+             try{
                 // No rank validation in admin UI — backend still accepts candidateNumber if provided, but admin will not send it from the UI.
 
                  // If mock mode is active we still use the mock endpoints (FormData). Otherwise call admin endpoints with JSON and adminPin.

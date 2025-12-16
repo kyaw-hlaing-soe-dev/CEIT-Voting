@@ -293,7 +293,7 @@ public class AdminController {
     }
 
     // New: multipart/form-data update endpoint (accepts file optionally)
-    @PutMapping(value = "/candidates/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, params = "adminPin")
+    @RequestMapping(value = "/candidates/{id}", method = {org.springframework.web.bind.annotation.RequestMethod.PUT, org.springframework.web.bind.annotation.RequestMethod.POST}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE, params = "adminPin")
     public org.springframework.http.ResponseEntity<?> updateCandidateMultipart(@RequestParam("adminPin") String pin, @PathVariable Long id,
                                                                                  @ModelAttribute CandidateForm form) {
         if (pin == null || !pin.equals(adminPin)) {
