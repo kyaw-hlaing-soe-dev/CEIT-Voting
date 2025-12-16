@@ -6,9 +6,11 @@ import com.KTU.KTUVotingapp.model.Voter;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +32,11 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 
     @Query("SELECT COUNT(v) FROM Vote v WHERE v.category = :category")
     long countByCategory(@Param("category") Category category);
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM Vote v WHERE v.category = :category")
+    int deleteByCategory(@Param("category") Category category);
 
     @Query("SELECT COUNT(v) FROM Vote v WHERE v.candidate.id = :candidateId")
     long countByCandidateId(@Param("candidateId") Long candidateId);

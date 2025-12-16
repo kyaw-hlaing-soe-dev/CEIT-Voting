@@ -374,14 +374,14 @@ public class AdminController {
             if (categoryStr != null && !categoryStr.isBlank()) {
                 try {
                     Category category = Category.valueOf(categoryStr.toUpperCase());
-                    int updated = candidateService.resetVotesByCategory(category, performedBy);
-                    return ResponseEntity.ok(Map.of("updatedRows", updated, "message", "Candidate vote counts reset for category " + category));
+                    java.util.Map<String, Object> result = candidateService.resetVotesByCategoryAndHistory(category, performedBy);
+                    return ResponseEntity.ok(Map.of("result", result, "message", "Candidate vote counts and history reset for category " + category));
                 } catch (IllegalArgumentException e) {
                     return ResponseEntity.badRequest().body(Map.of("error", "INVALID_CATEGORY", "message", "Category not recognized: " + categoryStr));
                 }
             } else {
-                int updated = candidateService.resetAllVotes(performedBy);
-                return ResponseEntity.ok(Map.of("updatedRows", updated, "message", "All candidate vote counts have been reset to 0."));
+                java.util.Map<String, Object> result = candidateService.resetAllVotesAndHistory(performedBy);
+                return ResponseEntity.ok(Map.of("result", result, "message", "All candidate vote counts and vote history have been reset."));
             }
          } catch (Exception e) {
              return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "RESET_FAILED", "message", e.getMessage()));

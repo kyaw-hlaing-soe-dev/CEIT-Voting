@@ -7,6 +7,8 @@ import com.KTU.KTUVotingapp.model.Candidate;
 import com.KTU.KTUVotingapp.model.Category;
 import com.KTU.KTUVotingapp.repository.AdminActionAuditRepository;
 import com.KTU.KTUVotingapp.repository.CandidateRepository;
+import com.KTU.KTUVotingapp.repository.VoteRepository;
+import com.KTU.KTUVotingapp.repository.VoterRepository;
 import com.KTU.KTUVotingapp.exception.RankingConflictException;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -26,10 +28,14 @@ public class CandidateService {
 
     private final CandidateRepository candidateRepository;
     private final AdminActionAuditRepository auditRepository;
+    private final VoteRepository voteRepository;
+    private final VoterRepository voterRepository;
 
-    public CandidateService(CandidateRepository candidateRepository, AdminActionAuditRepository auditRepository) {
+    public CandidateService(CandidateRepository candidateRepository, AdminActionAuditRepository auditRepository, VoteRepository voteRepository, VoterRepository voterRepository) {
         this.candidateRepository = candidateRepository;
         this.auditRepository = auditRepository;
+        this.voteRepository = voteRepository;
+        this.voterRepository = voterRepository;
     }
 
     @Cacheable(value = "candidates", key = "#category")
@@ -172,6 +178,63 @@ public class CandidateService {
         String details = "Reset votes for category " + category + ". Rows affected: " + updated;
         auditRepository.save(new AdminActionAudit("RESET_VOTES_BY_CATEGORY", details, performedBy));
         return updated;
+    }
+
+    /**
+     * Reset candidate vote counts and delete all vote history. Also reset voter flags.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED, propagation = Propagation.REQUIRES_NEW)
+    @CacheEvict(value = {"results", "candidates"}, allEntries = true)
+    public java.util.Map<String, Object> resetAllVotesAndHistory(String performedBy) {
+        long votesBefore = voteRepository.count();
+        int updatedCandidates = candidateRepository.resetAllVoteCounts();
+        // delete all vote rows
+        voteRepository.deleteAllInBatch();
+        // reset voter flags
+        int resetVoters = voterRepository.resetAllHasVoted();
+
+        String details = "Reset all candidate vote counts to 0 (rows affected: " + updatedCandidates + "); deleted votes: " + votesBefore + "; reset voters: " + resetVoters;
+        auditRepository.save(new AdminActionAudit("RESET_ALL_VOTES_HISTORY", details, performedBy));
+
+        return java.util.Map.of(
+                "updatedCandidates", updatedCandidates,
+                "deletedVotes", votesBefore,
+                "resetVoters", resetVoters
+        );
+    }
+
+    /**
+     * Reset votes for a given category: reset candidate counts for that category, delete votes in that category,
+     * and recompute voter hasVoted flags.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED, propagation = Propagation.REQUIRES_NEW)
+    @CacheEvict(value = {"results", "candidates"}, allEntries = true)
+    public java.util.Map<String, Object> resetVotesByCategoryAndHistory(Category category, String performedBy) {
+        long votesBefore = voteRepository.countByCategory(category);
+        int updatedCandidates = candidateRepository.resetVoteCountsByCategory(category);
+        int deleted = voteRepository.deleteByCategory(category);
+
+        // Recompute voter flags: for each voter, set hasVoted = exists any vote for that voter
+        java.util.List<com.KTU.KTUVotingapp.model.Voter> voters = voterRepository.findAll();
+        int modified = 0;
+        for (com.KTU.KTUVotingapp.model.Voter v : voters) {
+            boolean has = voteRepository.existsByVoter(v);
+            if (v.isHasVoted() != has) {
+                v.setHasVoted(has);
+                if (!has) v.setVotedAt(null);
+                modified++;
+            }
+        }
+        if (modified > 0) voterRepository.saveAll(voters);
+
+        String details = "Reset votes for category " + category + ". Candidate rows affected: " + updatedCandidates + ", votes deleted: " + deleted + ", voters updated: " + modified;
+        auditRepository.save(new AdminActionAudit("RESET_VOTES_BY_CATEGORY_HISTORY", details, performedBy));
+
+        return java.util.Map.of(
+                "updatedCandidates", updatedCandidates,
+                "deletedVotes", deleted,
+                "votersUpdated", modified
+        );
     }
 
     @Transactional
