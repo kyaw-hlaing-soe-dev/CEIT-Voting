@@ -120,8 +120,8 @@ ON CONFLICT (category, candidate_number) DO NOTHING;
 -- Create a dummy voter record with the shared PIN so PIN verification works
 -- Multiple devices can use the same PIN - each will get its own voter record when voting
 INSERT INTO voters (pin, device_id, has_voted)
-SELECT '12345', 'shared-pin-seed-' || EXTRACT(EPOCH FROM NOW()), FALSE
-WHERE NOT EXISTS (SELECT 1 FROM voters WHERE pin = '12345' LIMIT 1);
+SELECT '20267', 'shared-pin-seed-' || EXTRACT(EPOCH FROM NOW()), FALSE
+WHERE NOT EXISTS (SELECT 1 FROM voters WHERE pin = '20267' LIMIT 1);
 
 -- 5) Verify
 -- SELECT * FROM candidates;

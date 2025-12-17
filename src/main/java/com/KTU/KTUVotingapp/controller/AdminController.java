@@ -33,7 +33,8 @@ public class AdminController {
 
     private final ResultService resultService;
 
-    private String adminPin;
+    // adminPin will be injected from application properties (voting.admin-pin)
+    private final String adminPin;
 
     // Inject repository directly to avoid costly/contextual lookups per request
     private final CandidateRepository candidateRepository;
@@ -56,9 +57,9 @@ public class AdminController {
         }
     }
 
-    public AdminController(ResultService resultService, CandidateRepository candidateRepository, ImageStorageService imageStorageService, CandidateService candidateService, AdminActionAuditRepository auditRepository) {
+    public AdminController(ResultService resultService, CandidateRepository candidateRepository, ImageStorageService imageStorageService, CandidateService candidateService, AdminActionAuditRepository auditRepository, @Value("${voting.admin-pin}") String adminPin) {
         this.resultService = resultService;
-        this.adminPin = "99999";
+        this.adminPin = adminPin;
         this.candidateRepository = candidateRepository;
         this.imageStorageService = imageStorageService;
         this.candidateService = candidateService;

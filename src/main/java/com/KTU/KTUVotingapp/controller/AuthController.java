@@ -19,10 +19,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    @Value("${voting.user-pin:12345}")
+    @Value("${voting.user-pin}")
     private String userPin;
 
-    @Value("${voting.admin-pin:99999}")
+    @Value("${voting.admin-pin}")
     private String adminPin;
 
     private final VotingService votingService;

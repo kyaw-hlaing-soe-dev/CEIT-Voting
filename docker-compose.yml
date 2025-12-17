@@ -64,7 +64,7 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/ktuvoting
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-kkkkk11111}
-      - ADMIN_PIN=${ADMIN_PIN:-99999}
+      - ADMIN_PIN=${ADMIN_PIN:-88296}
       - JAVA_OPTS=-XX:+UseG1GC -Xms2g -Xmx4g -XX:MaxGCPauseMillis=200
     depends_on:
       postgres:

@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultsTableBody = document.querySelector("#results-table tbody");
 
     const API_BASE = "/api/admin";
-    const ADMIN_PIN = "99999";
+    const ADMIN_PIN = (window.KTUVoting && window.KTUVoting.adminPin) ? String(window.KTUVoting.adminPin) : "88296";
 
     document.getElementById("pinSubmit").addEventListener("click", async () => {
         const pin = pinInput.value;

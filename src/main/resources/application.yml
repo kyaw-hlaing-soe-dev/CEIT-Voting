@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: KTUVotingapp
+
+voting:
+  adminPin: ${ADMIN_PIN:88296}
+  userPin: ${USER_PIN:20267}
+  # Also provide hyphen-style names because some Java @Value annotations use voting.admin-pin / voting.user-pin
+  admin-pin: ${ADMIN_PIN:88296}
+  user-pin: ${USER_PIN:20267}

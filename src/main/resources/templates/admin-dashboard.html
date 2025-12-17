@@ -1,18 +1,20 @@
 <!DOCTYPE html>
-
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-
 <head>
-
     <meta charset="utf-8" />
-
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-
     <title>Admin Live Results — KTU Voting</title>
-
     <script src="https://cdn.tailwindcss.com"></script>
-
     <link rel="stylesheet" th:href="@{/styles.css}" />
+
+    <!-- Expose server-side voting pins to client JS. Values come from application.yml (voting.adminPin / voting.userPin) -->
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        window.KTUVoting = window.KTUVoting || {};
+        window.KTUVoting.adminPin = "[[${@environment.getProperty('voting.adminPin')}]]";
+        window.KTUVoting.userPin = "[[${@environment.getProperty('voting.userPin')}]]";
+        /*]]>*/
+    </script>
 
     <style>
         .thumbnail { width:44px; height:44px; object-fit:cover; border-radius:9999px; }
@@ -24,17 +26,7 @@
         .number-pill input:checked + span { border-color:#4f46e5; background:#eef2ff; color:#312e81; box-shadow:0 0 0 1px #4f46e5 inset; }
         .number-pill input:disabled + span { opacity:0.3; cursor:not-allowed; }
         
-        /* ===== RESPONSIVE TABLE LAYOUT - CSS GRID APPROACH ===== */
-        /* 
-         * WHY CSS GRID:
-         * - Better for two-dimensional layouts (rows AND columns)
-         * - Automatic wrapping with grid-template-columns
-         * - Easier gap control between items
-         * - Better responsive behavior with media queries
-         * - More predictable than Flexbox for multi-row layouts
-         */
-        
-        /* Mobile-first: Stack tables vertically by default */
+
         #live-category-grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -437,7 +429,8 @@
         const candidatesTbody = document.getElementById('candidates-tbody');
 
         // Config
-        const ADMIN_PIN = '99999'; // used for admin operations against /api/admin/*
+        // Use server-injected pins exposed via window.KTUVoting (set by Thymeleaf from application.yml)
+        const ADMIN_PIN = (window.KTUVoting && window.KTUVoting.adminPin) ? String(window.KTUVoting.adminPin) : '88296'; // used for admin operations against /api/admin/*
 
         // init
         async function init(){
