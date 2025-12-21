@@ -699,45 +699,72 @@
                 console.debug('renderLiveResults: injectedAdminPin=', injectedAdminPin);
                 // First try to call the admin stats endpoint using the expected query param name `adminPin`.
                 // Require server-injected adminPin. Calling /api/admin/results without adminPin triggers HTTP 400 (bad request).
-                if (!injectedAdminPin) {
-                    const fe = document.getElementById('fetchError');
-                    fe.textContent = 'Admin PIN not configured on server. Please set `voting.admin-pin` in application.yml and restart the application.';
-                    fe.style.display = '';
-                    const ph = document.getElementById('live-placeholder'); if (ph) ph.remove();
-                    return;
+                let statsRes;
+                if (injectedAdminPin) {
+                    // Prefer sending the configured adminPin as a one-shot query parameter
+                    statsRes = await fetch(`/api/admin/results?adminPin=${encodeURIComponent(injectedAdminPin)}`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                } else {
+                    // No server-injected pin available. Try session-based access first (user may have validated via /pin page).
+                    try {
+                        statsRes = await fetch('/api/admin/results', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                    } catch (e) {
+                        // network error; set statsRes to a non-ok fallback so the rest of the logic handles it
+                        statsRes = { ok: false, status: 0, text: async ()=>'Network error' };
+                    }
                 }
-                let statsRes = await fetch(`/api/admin/results?adminPin=${encodeURIComponent(injectedAdminPin)}`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
 
                 // If forbidden, attempt to validate the adminPin to establish a server-side session, then retry without query param
-                if (statsRes.status === 401 || statsRes.status === 403) {
-                    try {
+                 if (statsRes.status === 401 || statsRes.status === 403) {
+                     try {
                         if (injectedAdminPin) {
-                            // call validate endpoint to establish server-side session (sets session attribute)
+                            // If we have an injected pin, try validate to set a server-side session, then retry session-only
                             const vres = await fetch(`/api/admin/validate?adminPin=${encodeURIComponent(injectedAdminPin)}`, { credentials: 'same-origin', method: 'GET' });
                             if (vres.ok) {
-                                // retry without sending the pin (session should be authenticated)
                                 statsRes = await fetch('/api/admin/results', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
                             }
-                        }
-                    } catch (vErr) {
-                        console.debug('Admin validate retry failed', vErr);
-                    }
-
-                    // if still forbidden or any non-ok status, show clear admin-auth message and abort rendering
-                    if (!statsRes.ok) {
-                        const fe = document.getElementById('fetchError');
-                        let bodyText = '';
-                        try { bodyText = await statsRes.text(); } catch (e) { bodyText = ''; }
-                        if (statsRes.status === 400) {
-                            fe.textContent = 'Bad admin request (HTTP 400). Ensure `voting.admin-pin` is configured and not empty on the server.' + (bodyText ? (' Server: ' + bodyText) : '');
                         } else {
-                            fe.textContent = 'Admin authentication failed (HTTP ' + statsRes.status + '). Please ensure `voting.admin-pin` in application.yml matches the admin PIN the dashboard expects and that cookies/sessions are allowed.' + (bodyText ? (' Server: ' + bodyText) : '');
+                            // No injected pin available; tell user to validate via /pin if the session isn't authenticated
+                            try {
+                                const sres = await fetch('/api/admin/session', { method: 'GET', credentials: 'same-origin' });
+                                if (sres.ok) {
+                                    const sj = await sres.json().catch(()=>({}));
+                                    if (sj && sj.authenticated) {
+                                        // Session is authenticated but initial request was forbidden; retry once
+                                        statsRes = await fetch('/api/admin/results', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                                    }
+                                }
+                            } catch (e) {
+                                console.debug('session check during forbidden path failed', e);
+                            }
                         }
-                        console.debug('renderLiveResults: statsRes status=', statsRes.status, ' body=', bodyText);
-                        fe.style.display = '';
-                        const ph = document.getElementById('live-placeholder'); if (ph) ph.remove();
-                        return;
-                    }
+                     } catch (vErr) {
+                         console.debug('Admin validate retry failed', vErr);
+                     }
+
+                     // if still forbidden or any non-ok status, show clear admin-auth message and abort rendering
+                     if (!statsRes.ok) {
+                         const fe = document.getElementById('fetchError');
+                         let bodyText = '';
+                         try { bodyText = await statsRes.text(); } catch (e) { bodyText = ''; }
+                         if (statsRes.status === 400) {
+                            fe.textContent = 'Bad admin request (HTTP 400). Ensure `voting.admin-pin` is configured and not empty on the server.' + (bodyText ? (' Server: ' + bodyText) : '');
+                         } else if (statsRes.status === 0) {
+                            fe.textContent = 'Network error while contacting admin endpoint. Check server availability.' + (bodyText ? (' Server: ' + bodyText) : '');
+                         } else if (statsRes.status === 401 || statsRes.status === 403) {
+                            // No injected pin and session not authenticated: instruct user to validate via /pin
+                            if (!injectedAdminPin) {
+                                fe.textContent = 'Admin access requires authentication. Please visit /pin and enter the admin PIN to validate, or ensure cookies/sessions are allowed.';
+                            } else {
+                                fe.textContent = 'Admin authentication failed (HTTP ' + statsRes.status + '). Please ensure `voting.admin-pin` in application.yml matches the admin PIN the dashboard expects and that cookies/sessions are allowed.' + (bodyText ? (' Server: ' + bodyText) : '');
+                            }
+                         } else {
+                            fe.textContent = 'Admin authentication failed (HTTP ' + statsRes.status + '). Please ensure `voting.admin-pin` in application.yml matches the admin PIN the dashboard expects and that cookies/sessions are allowed.' + (bodyText ? (' Server: ' + bodyText) : '');
+                         }
+                         console.debug('renderLiveResults: statsRes status=', statsRes.status, ' body=', bodyText);
+                         fe.style.display = '';
+                         const ph = document.getElementById('live-placeholder'); if (ph) ph.remove();
+                         return;
+                     }
                 }
 
                 const resultsRes = await fetch('/api/results/all', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });

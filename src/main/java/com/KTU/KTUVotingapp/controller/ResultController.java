@@ -50,7 +50,10 @@ public class ResultController {
      * Legacy endpoint (renamed to avoid collision). Use /api/admin/results (AdminController) for real admin dashboard.
      * GET /api/admin/results-legacy?pin={pin}
      */
-    @GetMapping("/api/admin/results-legacy")
+    // NOTE: this method previously used an absolute path beginning with /api which resulted in
+    // the effective path becoming /api/results/api/admin/results-legacy due to the class-level
+    // @RequestMapping("/api/results"). Use a relative path here to avoid confusion.
+    @GetMapping("/admin/results-legacy")
     public ResponseEntity<java.util.List<ResultDTO.CandidateResultDTO>> getLiveAdminResultsLegacy(@RequestParam(value = "pin", required = false) String pin) {
         // Keep legacy behavior: allow a particular hardcoded pin '99999' for backward compatibility.
         if (pin == null || !pin.equals("99999")) {

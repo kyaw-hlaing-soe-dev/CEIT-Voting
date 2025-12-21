@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.HashMap;
@@ -89,7 +90,12 @@ public class AdminController {
      * is omitted and supports both session-based and one-shot pin auth.
      */
     @GetMapping("/results")
-    public ResponseEntity<?> getLiveAdminResults(@RequestParam(value = "adminPin", required = false) String pin, HttpSession session) {
+    public ResponseEntity<?> getLiveAdminResults(@RequestParam(value = "adminPin", required = false) String adminPinParam,
+                                                 @RequestParam(value = "pin", required = false) String legacyPinParam,
+                                                 HttpSession session) {
+        // Prefer the explicit adminPin param, but accept legacy "pin" param for backward compatibility
+        String pin = adminPinParam != null ? adminPinParam : legacyPinParam;
+
         boolean authorized = false;
         if (pin != null && pin.equals(adminPin)) authorized = true;
         if (!authorized && isAdminSessionAuthenticated(session)) authorized = true;
@@ -501,5 +507,15 @@ public class AdminController {
     public ResponseEntity<?> checkAdminSession(HttpSession session) {
         boolean auth = Boolean.TRUE.equals(session.getAttribute("adminAuthenticated"));
         return ResponseEntity.ok(Map.of("authenticated", auth));
+    }
+
+    // Debug endpoint to inspect whether an adminPin is configured (does NOT reveal the pin value). Safe for dev.
+    @GetMapping("/debug/config")
+    public ResponseEntity<?> debugConfig(HttpServletRequest request) {
+        // Return non-sensitive debug information about whether an adminPin is configured.
+        Map<String, Object> info = new HashMap<>();
+        info.put("adminPinConfigured", !this.adminPin.isBlank());
+        info.put("adminPinLength", this.adminPin.length());
+        return ResponseEntity.ok(info);
     }
 }
