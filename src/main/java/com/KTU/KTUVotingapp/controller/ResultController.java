@@ -46,12 +46,13 @@ public class ResultController {
     }
 
     /**
-     * Get live admin results - secured endpoint.
-     * GET /api/admin/results?pin={pin}
+     * Live admin flattened candidate results for dashboard polling.
+     * Legacy endpoint (renamed to avoid collision). Use /api/admin/results (AdminController) for real admin dashboard.
+     * GET /api/admin/results-legacy?pin={pin}
      */
-    @GetMapping("/api/admin/results")
-    public ResponseEntity<java.util.List<ResultDTO.CandidateResultDTO>> getLiveAdminResults(@RequestParam("pin") String pin) {
-        // Simple hardcoded PIN check as requested
+    @GetMapping("/api/admin/results-legacy")
+    public ResponseEntity<java.util.List<ResultDTO.CandidateResultDTO>> getLiveAdminResultsLegacy(@RequestParam(value = "pin", required = false) String pin) {
+        // Keep legacy behavior: allow a particular hardcoded pin '99999' for backward compatibility.
         if (pin == null || !pin.equals("99999")) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN);
         }

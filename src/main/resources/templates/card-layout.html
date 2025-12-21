@@ -253,7 +253,6 @@
         </div>
     </div>
 
-    <script src="/js/fingerprint.js"></script>
     <script th:src="@{/js/voting.js}"></script>
     <script th:inline="javascript">
         function loadSelections() {
@@ -317,8 +316,8 @@
                     throw new Error('PIN not found. Please start over.');
                 }
 
-                // Always reuse persisted device ID; create once if missing
-                const deviceId = await VotingApp.getDeviceId();
+                // No device id is used; rely on paper PIN uniqueness and server-side burn-on-use
+                // const token = sessionStorage.getItem('voteToken');
 
                 // Load all selections
                 const selections = VotingApp.loadSelectionsForSummary();
@@ -335,8 +334,8 @@
                     throw new Error('No votes selected. Please go back and make your selections.');
                 }
 
-                // Submit votes to database
-                await VotingApp.submitVotes({ pin, deviceId, votes });
+                // Submit votes to database — VotingApp.submitVotes expects the votes array and will use the stored token
+                await VotingApp.submitVotes(votes);
 
                 // Redirect to success page (do not clear selections here so success page can display them)
                 window.location.href = SUCCESS_URL;

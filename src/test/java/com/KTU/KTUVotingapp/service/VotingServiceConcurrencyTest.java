@@ -5,13 +5,14 @@ import com.KTU.KTUVotingapp.model.Candidate;
 import com.KTU.KTUVotingapp.model.Category;
 import com.KTU.KTUVotingapp.repository.CandidateRepository;
 import com.KTU.KTUVotingapp.repository.VoteRepository;
-import com.KTU.KTUVotingapp.repository.VoterRepository;
+import com.KTU.KTUVotingapp.service.PinService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -36,19 +37,18 @@ public class VotingServiceConcurrencyTest {
     private VotingService votingService;
 
     @Autowired
-    private VoterRepository voterRepository;
-
-    @Autowired
     private VoteRepository voteRepository;
 
     @Autowired
     private CandidateRepository candidateRepository;
 
+    @Autowired
+    private PinService pinService;
+
     @BeforeEach
     void setUp() {
         // Ensure DB clean
         voteRepository.deleteAll();
-        voterRepository.deleteAll();
         candidateRepository.deleteAll();
 
         // Create candidate for CATEGORY KING with candidateNumber 1
@@ -57,7 +57,7 @@ public class VotingServiceConcurrencyTest {
     }
 
     @Test
-    void concurrentSingleDeviceVoting_shouldOnlyCreateOneVote() throws InterruptedException {
+    void concurrentSinglePinVoting_shouldOnlyCreateOneVote() throws InterruptedException {
         int threads = 50;
         ExecutorService exec = Executors.newFixedThreadPool(threads);
         CountDownLatch ready = new CountDownLatch(threads);
@@ -65,8 +65,9 @@ public class VotingServiceConcurrencyTest {
         AtomicInteger conflicts = new AtomicInteger(0);
 
         List<Runnable> tasks = new ArrayList<>();
-        String deviceId = "device-123";
-        String pin = "12345";
+        String pin = pinService.generatePins(1).get(0);
+        // issue a single token that will be consumed by the first successful thread
+        String token = pinService.issueSessionToken(pin, LocalDateTime.now().plusMinutes(10));
 
         for (int i = 0; i < threads; i++) {
             tasks.add(() -> {
@@ -74,12 +75,10 @@ public class VotingServiceConcurrencyTest {
                 try {
                     start.await();
                     VoteRequest req = new VoteRequest();
-                    req.setDeviceId(deviceId);
-                    req.setPin(pin);
                     req.setCategory(Category.KING);
                     req.setCandidateNumber(1);
                     try {
-                        votingService.submitVote(req);
+                        votingService.submitVote(token, req);
                     } catch (Exception e) {
                         conflicts.incrementAndGet();
                     }

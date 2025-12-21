@@ -11,8 +11,12 @@
     <script th:inline="javascript">
         /*<![CDATA[*/
         window.KTUVoting = window.KTUVoting || {};
-        window.KTUVoting.adminPin = "[[${@environment.getProperty('voting.adminPin')}]]";
-        window.KTUVoting.userPin = "[[${@environment.getProperty('voting.userPin')}]]";
+        // Prefer the exact property the backend expects (voting.admin-pin). Fallback to older voting.adminPin if present.
+        var __adminPinVal = "[[${@environment.getProperty('voting.admin-pin')}]]";
+        if (!__adminPinVal || __adminPinVal === 'null') __adminPinVal = "[[${@environment.getProperty('voting.adminPin')}]]";
+        window.KTUVoting.adminPin = String(__adminPinVal || '').trim();
+        // also expose userPin if present
+        window.KTUVoting.userPin = "[[${@environment.getProperty('voting.userPin')}]]" || '';
         /*]]>*/
     </script>
 
@@ -25,7 +29,7 @@
         .number-pill span { display:block; padding:0.5rem 0; border:1px solid #e5e7eb; border-radius:0.75rem; text-align:center; font-weight:600; color:#4b5563; background:#fff; transition:all 0.15s ease; }
         .number-pill input:checked + span { border-color:#4f46e5; background:#eef2ff; color:#312e81; box-shadow:0 0 0 1px #4f46e5 inset; }
         .number-pill input:disabled + span { opacity:0.3; cursor:not-allowed; }
-        
+
 
         #live-category-grid {
             display: grid;
@@ -34,7 +38,7 @@
             width: 100%;
             box-sizing: border-box;
         }
-        
+
         /* Tablet: 2 columns side by side */
         @media (min-width: 768px) {
             #live-category-grid {
@@ -42,7 +46,7 @@
                 gap: 1.5rem;
             }
         }
-        
+
         /* Desktop: Still 2 columns for optimal readability */
         @media (min-width: 1024px) {
             #live-category-grid {
@@ -50,7 +54,7 @@
                 gap: 2rem;
             }
         }
-        
+
         /* Large Desktop: Optional 3 columns if more space is needed */
         @media (min-width: 1536px) {
             #live-category-grid {
@@ -58,20 +62,20 @@
                 gap: 2rem;
             }
         }
-        
+
         /* Ensure table cards have stable width and don't overflow */
         #live-category-grid > div {
             min-width: 0; /* Crucial: allows grid items to shrink below content size */
             box-sizing: border-box;
         }
-        
+
         /* Table responsive behavior */
         #live-category-grid table {
             width: 100%;
             table-layout: fixed; /* Prevents tables from breaking layout */
             word-wrap: break-word;
         }
-        
+
         /* Ensure scrollable container doesn't break grid */
         .table-scroll {
             overflow-x: auto;
@@ -99,6 +103,7 @@
                 <div id="modeBadge" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">Mode</div>
                 <button id="btn-live" class="px-4 py-2 rounded bg-white border border-gray-200">Live Results</button>
                 <button id="btn-manage" class="px-4 py-2 rounded bg-indigo-600 text-white">Candidate Management</button>
+                <button id="btn-pins" class="px-4 py-2 rounded bg-green-600 text-white">PIN Management</button>
                 <button id="btn-reset-votes" class="px-4 py-2 rounded bg-red-50 text-red-600 border border-red-200">Reset votes</button>
                 <button id="btn-view-audit" class="px-4 py-2 rounded bg-yellow-50 text-yellow-800 border border-yellow-200">View Audit</button>
                 <button id="manualRefreshBtn" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Refresh Now</button>
@@ -140,18 +145,21 @@
                         <div class="text-3xl text-indigo-500">⏱️</div>
                     </div>
                 </div>
-                 <!-- 
-                   RESPONSIVE TABLE LAYOUT CONTAINER
-                   Using CSS Grid for optimal responsive behavior:
-                   - Mobile: 1 column (stacked)
-                   - Tablet/Desktop: 2 columns side-by-side
-                   - Large screens: 3 columns (optional)
-                   
-                   Tables are dynamically populated by JavaScript (see renderLiveResults function)
-                 -->
-                 <div id="live-category-grid">
-                     <!-- Tables for KING, QUEEN, PRINCE, PRINCESS, COUPLE will be inserted here by JS -->
-                 </div>
+                <!--
+                  RESPONSIVE TABLE LAYOUT CONTAINER
+                  Using CSS Grid for optimal responsive behavior:
+                  - Mobile: 1 column (stacked)
+                  - Tablet/Desktop: 2 columns side-by-side
+                  - Large screens: 3 columns (optional)
+
+                  Tables are dynamically populated by JavaScript (see renderLiveResults function)
+                -->
+                <div id="live-category-grid">
+                    <!-- Tables for KING, QUEEN, PRINCE, PRINCESS, COUPLE will be inserted here by JS -->
+                    <div id="live-placeholder" class="bg-white p-6 rounded-lg text-center text-gray-600">Loading live results…</div>
+                </div>
+
+                <!-- per-category live tables rendered by renderLiveResults() into #live-category-grid -->
             </section>
 
             <!-- Candidate Management View -->
@@ -215,24 +223,70 @@
                             <div class="overflow-auto">
                                 <table class="min-w-full divide-y divide-gray-200 text-sm">
                                     <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-4 py-2 text-left text-xs text-gray-500">#</th>
-                                            <th class="px-4 py-2 text-left text-xs text-gray-500">No.</th>
-                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Candidate</th>
-                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Category</th>
-                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Dept</th>
-                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Votes</th>
-                                            <th class="px-4 py-2 text-left text-xs text-gray-500">Actions</th>
-                                        </tr>
+                                    <tr>
+                                        <th class="px-4 py-2 text-left text-xs text-gray-500">#</th>
+                                        <th class="px-4 py-2 text-left text-xs text-gray-500">No.</th>
+                                        <th class="px-4 py-2 text-left text-xs text-gray-500">Candidate</th>
+                                        <th class="px-4 py-2 text-left text-xs text-gray-500">Category</th>
+                                        <th class="px-4 py-2 text-left text-xs text-gray-500">Dept</th>
+                                        <th class="px-4 py-2 text-left text-xs text-gray-500">Votes</th>
+                                        <th class="px-4 py-2 text-left text-xs text-gray-500">Actions</th>
+                                    </tr>
                                     </thead>
                                     <tbody id="candidates-tbody" class="bg-white divide-y divide-gray-100">
-                                        <!-- rows injected -->
+                                    <!-- rows injected -->
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                     </div>
 
+                </div>
+            </section>
+
+            <!-- PIN Management View -->
+            <section id="view-pins" class="hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <div class="lg:col-span-1 bg-white p-4 rounded-lg card-shadow">
+                        <h3 class="font-semibold mb-3">Generate PINs</h3>
+                        <p class="text-sm text-gray-500 mb-3">Create unique 7-digit paper PINs for printing.</p>
+                        <div class="space-y-3">
+                            <label class="block text-sm font-medium text-gray-700">Number of PINs</label>
+                            <input id="pin-count" type="number" min="1" max="100000" value="1500" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm p-2" />
+                            <button id="generatePinsBtn" class="w-full px-4 py-2 bg-green-600 text-white rounded">Generate</button>
+                        </div>
+                        <hr class="my-4" />
+                        <h3 class="font-semibold mb-3">Export</h3>
+                        <p class="text-sm text-gray-500 mb-3">Download CSV for mail-merge printing.</p>
+                        <button id="exportPinsBtn" class="w-full px-4 py-3 bg-blue-600 text-white rounded">Download CSV for Printing</button>
+                    </div>
+
+                    <div class="lg:col-span-2 bg-white p-4 rounded-lg card-shadow">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-semibold">PIN Inventory</h3>
+                            <div>
+                                <input id="searchPinInput" type="text" placeholder="Search PIN" class="rounded border-gray-200 p-2 text-sm" />
+                                <button id="searchPinBtn" class="ml-2 px-3 py-2 bg-gray-100 rounded">Search</button>
+                            </div>
+                        </div>
+                        <div class="mb-3 text-sm text-gray-600" id="pinsSummary">Generated: 0 | Used: 0 | Remaining: 0</div>
+                        <div class="overflow-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs text-gray-500">#</th>
+                                    <th class="px-4 py-2 text-left text-xs text-gray-500">PIN</th>
+                                    <th class="px-4 py-2 text-left text-xs text-gray-500">Status</th>
+                                    <th class="px-4 py-2 text-left text-xs text-gray-500">Used At</th>
+                                </tr>
+                                </thead>
+                                <tbody id="pinsTbody" class="bg-white divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3 flex justify-end">
+                            <button id="loadMorePins" class="px-3 py-2 rounded bg-gray-100">Load more</button>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -412,10 +466,12 @@
 
         const btnLive = document.getElementById('btn-live');
         const btnManage = document.getElementById('btn-manage');
+        const btnPins = document.getElementById('btn-pins');
         const manualRefreshBtn = document.getElementById('manualRefreshBtn');
 
         const viewLive = document.getElementById('view-live');
         const viewManage = document.getElementById('view-manage');
+        const viewPins = document.getElementById('view-pins');
 
         const candidateForm = document.getElementById('candidate-form');
         const candidateIdInput = document.getElementById('candidate-id');
@@ -430,7 +486,7 @@
 
         // Config
         // Use server-injected pins exposed via window.KTUVoting (set by Thymeleaf from application.yml)
-        const ADMIN_PIN = (window.KTUVoting && window.KTUVoting.adminPin) ? String(window.KTUVoting.adminPin) : '88296'; // used for admin operations against /api/admin/*
+        const ADMIN_PIN = (window.KTUVoting && window.KTUVoting.adminPin) ? String(window.KTUVoting.adminPin).trim() : ''; // used for admin operations against /api/admin/*
 
         // init
         async function init(){
@@ -492,6 +548,7 @@
         function attachEvents(){
             btnLive.addEventListener('click', ()=> showView('live'));
             btnManage.addEventListener('click', ()=> showView('manage'));
+            btnPins.addEventListener('click', ()=> showView('pins'));
             manualRefreshBtn.addEventListener('click', ()=> {
                 // Force showing the Live Results page after reload
                 try { sessionStorage.setItem('adminOpenView', 'live'); } catch(e) {}
@@ -504,6 +561,19 @@
             imageInput.addEventListener('change', onImageChange);
             candidateForm.addEventListener('submit', onSubmitCandidate);
             btnReset.addEventListener('click', resetForm);
+
+            // PIN management events
+            const generatePinsBtn = document.getElementById('generatePinsBtn');
+            if (generatePinsBtn) generatePinsBtn.addEventListener('click', onGeneratePins);
+
+            const exportPinsBtn = document.getElementById('exportPinsBtn');
+            if (exportPinsBtn) exportPinsBtn.addEventListener('click', onExportPins);
+
+            const searchPinBtn = document.getElementById('searchPinBtn');
+            if (searchPinBtn) searchPinBtn.addEventListener('click', onSearchPin);
+
+            const loadMorePinsBtn = document.getElementById('loadMorePins');
+            if (loadMorePinsBtn) loadMorePinsBtn.addEventListener('click', onLoadMorePins);
         }
 
         async function onViewAuditClicked(){
@@ -624,10 +694,53 @@
             const container = document.getElementById('live-category-grid');
             container.innerHTML = '';
             try{
-                const [statsRes, resultsRes] = await Promise.all([
-                    fetch(`/api/admin/results?adminPin=${encodeURIComponent(ADMIN_PIN)}`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } }),
-                    fetch('/api/results/all', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
-                ]);
+                // Determine admin pin (server-injected preferred)
+                const injectedAdminPin = (window.KTUVoting && window.KTUVoting.adminPin) ? String(window.KTUVoting.adminPin).trim() : null;
+                console.debug('renderLiveResults: injectedAdminPin=', injectedAdminPin);
+                // First try to call the admin stats endpoint using the expected query param name `adminPin`.
+                // Require server-injected adminPin. Calling /api/admin/results without adminPin triggers HTTP 400 (bad request).
+                if (!injectedAdminPin) {
+                    const fe = document.getElementById('fetchError');
+                    fe.textContent = 'Admin PIN not configured on server. Please set `voting.admin-pin` in application.yml and restart the application.';
+                    fe.style.display = '';
+                    const ph = document.getElementById('live-placeholder'); if (ph) ph.remove();
+                    return;
+                }
+                let statsRes = await fetch(`/api/admin/results?adminPin=${encodeURIComponent(injectedAdminPin)}`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+
+                // If forbidden, attempt to validate the adminPin to establish a server-side session, then retry without query param
+                if (statsRes.status === 401 || statsRes.status === 403) {
+                    try {
+                        if (injectedAdminPin) {
+                            // call validate endpoint to establish server-side session (sets session attribute)
+                            const vres = await fetch(`/api/admin/validate?adminPin=${encodeURIComponent(injectedAdminPin)}`, { credentials: 'same-origin', method: 'GET' });
+                            if (vres.ok) {
+                                // retry without sending the pin (session should be authenticated)
+                                statsRes = await fetch('/api/admin/results', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                            }
+                        }
+                    } catch (vErr) {
+                        console.debug('Admin validate retry failed', vErr);
+                    }
+
+                    // if still forbidden or any non-ok status, show clear admin-auth message and abort rendering
+                    if (!statsRes.ok) {
+                        const fe = document.getElementById('fetchError');
+                        let bodyText = '';
+                        try { bodyText = await statsRes.text(); } catch (e) { bodyText = ''; }
+                        if (statsRes.status === 400) {
+                            fe.textContent = 'Bad admin request (HTTP 400). Ensure `voting.admin-pin` is configured and not empty on the server.' + (bodyText ? (' Server: ' + bodyText) : '');
+                        } else {
+                            fe.textContent = 'Admin authentication failed (HTTP ' + statsRes.status + '). Please ensure `voting.admin-pin` in application.yml matches the admin PIN the dashboard expects and that cookies/sessions are allowed.' + (bodyText ? (' Server: ' + bodyText) : '');
+                        }
+                        console.debug('renderLiveResults: statsRes status=', statsRes.status, ' body=', bodyText);
+                        fe.style.display = '';
+                        const ph = document.getElementById('live-placeholder'); if (ph) ph.remove();
+                        return;
+                    }
+                }
+
+                const resultsRes = await fetch('/api/results/all', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
                 if (!statsRes.ok) throw new Error('Stats status ' + statsRes.status);
                 if (!resultsRes.ok) throw new Error('Results status ' + resultsRes.status);
                 const statsPayload = await statsRes.json();
@@ -643,25 +756,47 @@
                 if (lastUpdatedEl) {
                     lastUpdatedEl.textContent = new Date().toLocaleTimeString();
                 }
-                const allResults = Array.isArray(resultsPayload) ? resultsPayload : [];
+                // Support multiple response shapes:
+                // - Array<ResultDTO>
+                // - { results: Array<ResultDTO> }
+                // - { data: Array<ResultDTO> }
+                // - { categories: [...] }
+                let allResults = [];
+                if (Array.isArray(resultsPayload)) {
+                    allResults = resultsPayload;
+                } else if (resultsPayload && Array.isArray(resultsPayload.results)) {
+                    allResults = resultsPayload.results;
+                } else if (resultsPayload && Array.isArray(resultsPayload.data)) {
+                    allResults = resultsPayload.data;
+                } else if (resultsPayload && Array.isArray(resultsPayload.categories)) {
+                    allResults = resultsPayload.categories;
+                } else if (resultsPayload && typeof resultsPayload === 'object') {
+                    // Sometimes the server returns a mapping of category->candidates
+                    // Convert that mapping into an array of ResultDTO-like objects
+                    const keys = Object.keys(resultsPayload);
+                    const possible = keys.filter(k => typeof resultsPayload[k] === 'object');
+                    if (possible.length && possible.every(k => Array.isArray(resultsPayload[k]))) {
+                        allResults = possible.map(k => ({ category: k, candidates: resultsPayload[k] }));
+                    }
+                }
 
-                 // build grouped map: category -> candidates array
-                 const grouped = {};
-                 (categories || []).forEach(c => grouped[c]=[]);
+                // build grouped map: category -> candidates array
+                const grouped = {};
+                (categories || []).forEach(c => grouped[c]=[]);
                 allResults.forEach(result => {
                     const catKey = String(result.category);
-                    const candList = Array.isArray(result.candidates) ? result.candidates : [];
+                    const candList = Array.isArray(result.candidates) ? result.candidates : (Array.isArray(result.list) ? result.list : []);
                     grouped[catKey] = candList.map(ci => ({
                         id: ci.id,
                         name: ci.name,
                         department: ci.department || '',
-                        votes: ci.voteCount || 0,
-                        imageUrl: ci.imageUrl || ''
+                        votes: ci.voteCount ?? ci.votes ?? ci.vote_count ?? 0,
+                        imageUrl: ci.imageUrl || ci.image || ''
                     }));
                 });
 
-                 (categories || []).forEach(cat => {
-                     const arr = (grouped[cat]||[]).slice().sort((a,b)=> b.votes - a.votes).slice(0,5);
+                (categories || []).forEach(cat => {
+                    const arr = (grouped[cat]||[]).slice().sort((a,b)=> b.votes - a.votes).slice(0,5);
 
                     // map category name to CSS class defined in styles.css
                     const catClassMap = {
@@ -687,18 +822,20 @@
                     table.innerHTML = `<thead class='text-left text-xs text-white/80 uppercase'><tr><th class='py-1'>#</th><th class='py-1'>Candidate</th><th class='py-1'>Votes</th></tr></thead><tbody class='text-sm'></tbody>`;
                     const tb = table.querySelector('tbody');
                     arr.forEach((c, idx) => {
-                        const tr = document.createElement('tr');
-                        // lighter row styles on top of gradient
-                        tr.className = (idx%2===0)?'bg-white/10':'bg-white/06';
-                        tr.innerHTML = `<td class='py-2 pr-3 text-white/90'>${idx+1}</td><td class='py-2 pr-3 flex items-center gap-3 text-white'><img src='${c.imageUrl}' class='thumbnail' alt=''/><div><div class='font-medium text-white'>${c.name}</div><div class='text-xs text-white/80'>${c.department || ''}</div></div></td><td class='py-2 pr-3 font-semibold text-white'>${c.votes}</td>`;
-                        tb.appendChild(tr);
-                    });
+                         const tr = document.createElement('tr');
+                         // lighter row styles on top of gradient
+                         tr.className = (idx%2===0)?'bg-white/10':'bg-white/06';
+                         tr.innerHTML = `<td class='py-2 pr-3 text-white/90'>${idx+1}</td><td class='py-2 pr-3 flex items-center gap-3 text-white'><img src='${c.imageUrl}' class='thumbnail' alt=''/><div><div class='font-medium text-white'>${c.name}</div><div class='text-xs text-white/80'>${c.department || ''}</div></div></td><td class='py-2 pr-3 font-semibold text-white'>${c.votes}</td>`;
+                         tb.appendChild(tr);
+                     });
                     card.appendChild(table);
                     container.appendChild(card);
-                });
+                 });
+                 // remove placeholder if results rendered
+                 const ph = document.getElementById('live-placeholder'); if (ph) ph.remove();
 
-                viewLive.classList.remove('hidden');
-                viewManage.classList.add('hidden');
+                 viewLive.classList.remove('hidden');
+                 viewManage.classList.add('hidden');
             } catch(err){
                 console.error('Failed to fetch /api/results', err);
                 const fe = document.getElementById('fetchError');
@@ -782,7 +919,7 @@
             // set candidate number when editing
             setSelectedNumber(c.candidateNumber ?? null);
             showView('manage');
-         }
+        }
 
         // Delete candidate
         async function onDeleteCandidate(e){
@@ -897,22 +1034,22 @@
         buildNumberSelector();
 
         // Submit create/update
-         async function onSubmitCandidate(ev){
-             ev.preventDefault();
-             const id = candidateIdInput.value ? parseInt(candidateIdInput.value,10) : null;
-             // ensure candidate number selected
-             const selNum = getSelectedNumber();
-             if (selNum == null){
-                 numberValidation.style.display = '';
-                 numberValidation.textContent = 'Candidate number is required (1–10).';
-                 return;
-             }
-             const formData = new FormData();
-             formData.append('name', nameInput.value.trim());
-             formData.append('department', deptInput.value.trim());
-             formData.append('category', categorySelect.value);
-             // include candidateNumber if selected
-             if (selNum != null) formData.append('candidateNumber', String(selNum));
+        async function onSubmitCandidate(ev){
+            ev.preventDefault();
+            const id = candidateIdInput.value ? parseInt(candidateIdInput.value,10) : null;
+            // ensure candidate number selected
+            const selNum = getSelectedNumber();
+            if (selNum == null){
+                numberValidation.style.display = '';
+                numberValidation.textContent = 'Candidate number is required (1–10).';
+                return;
+            }
+            const formData = new FormData();
+            formData.append('name', nameInput.value.trim());
+            formData.append('department', deptInput.value.trim());
+            formData.append('category', categorySelect.value);
+            // include candidateNumber if selected
+            if (selNum != null) formData.append('candidateNumber', String(selNum));
             if (imageInput.files && imageInput.files[0]) {
                 formData.append('image', imageInput.files[0]);
             } else {
@@ -921,14 +1058,14 @@
                 if (existingUrl) formData.append('imageUrl', existingUrl);
             }
 
-             console.group('FormData');
-             for (let pair of formData.entries()) console.log(pair[0], pair[1]);
-             console.groupEnd();
+            console.group('FormData');
+            for (let pair of formData.entries()) console.log(pair[0], pair[1]);
+            console.groupEnd();
 
-             try{
+            try{
                 // No rank validation in admin UI — backend still accepts candidateNumber if provided, but admin will not send it from the UI.
 
-                 // If mock mode is active we still use the mock endpoints (FormData). Otherwise call admin endpoints with JSON and adminPin.
+                // If mock mode is active we still use the mock endpoints (FormData). Otherwise call admin endpoints with JSON and adminPin.
                 if (window.__USE_MOCK === true || window.location.search.includes('mock=true')){
                     if (id){
                         const res = await fetch(`/api/candidates/${id}`, { method: 'PUT', body: formData, credentials: 'same-origin' });
@@ -978,26 +1115,167 @@
             await refreshAll();
         }
 
+        // PIN Management: Generate PINs
+        async function onGeneratePins(){
+            const countInput = document.getElementById('pin-count');
+            const count = parseInt(countInput.value, 10);
+            if (isNaN(count) || count < 1 || count > 100000) {
+                return alert('Invalid PIN count. Must be between 1 and 100000.');
+            }
+            if (!confirm(`Generate ${count} new PINs?`)) return;
+
+            try {
+                const res = await fetch(`/api/admin/pins/generate?adminPin=${encodeURIComponent(ADMIN_PIN)}&count=${encodeURIComponent(count)}`, { method: 'POST', credentials: 'same-origin' });
+                if (!res.ok) {
+                    const text = await res.text().catch(()=>null);
+                    throw new Error(text || ('Status ' + res.status));
+                }
+                const payload = await res.json();
+                showToast(`Generated ${payload.generatedCount} PINs`);
+
+                // Update PIN inventory table
+                await refreshPinInventory();
+            } catch(err) {
+                console.error('Failed to generate PINs', err);
+                alert('Error generating PINs: ' + (err.message || err));
+            }
+        }
+
+        // PIN Management: Export PINs as CSV
+        async function onExportPins(){
+            try {
+                const res = await fetch(`/api/admin/pins/export?adminPin=${encodeURIComponent(ADMIN_PIN)}`, { method: 'GET', credentials: 'same-origin' });
+                if (!res.ok) {
+                    const text = await res.text().catch(()=>null);
+                    throw new Error(text || ('Status ' + res.status));
+                }
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'pins_export.csv';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                showToast('Export started');
+            } catch(err) {
+                console.error('Failed to export PINs', err);
+                alert('Error exporting PINs: ' + (err.message || err));
+            }
+        }
+
+        // PIN Management: Search PINs
+        async function onSearchPin(){
+            const input = document.getElementById('searchPinInput');
+            const query = input.value.trim();
+            if (!query) return alert('Please enter a PIN to search');
+
+            try {
+                const res = await fetch(`/api/admin/pins/search?adminPin=${encodeURIComponent(ADMIN_PIN)}&query=${encodeURIComponent(query)}`, { method: 'GET', credentials: 'same-origin' });
+                if (!res.ok) {
+                    const text = await res.text().catch(()=>null);
+                    throw new Error(text || ('Status ' + res.status));
+                }
+                const payload = await res.json();
+                const tbody = document.getElementById('pinsTbody');
+                tbody.innerHTML = '';
+                (payload.pins || []).forEach((pin, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class='px-4 py-3'>${idx+1}</td>
+                        <td class='px-4 py-3'>${pin.pin}</td>
+                        <td class='px-4 py-3'>${pin.status}</td>
+                        <td class='px-4 py-3'>${pin.usedAt || '-'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                showToast(`Found ${payload.pins.length} PINs`);
+            } catch(err) {
+                console.error('Failed to search PINs', err);
+                alert('Error searching PINs: ' + (err.message || err));
+            }
+        }
+
+        // PIN Management: Load more PINs
+        async function onLoadMorePins(){
+            const tbody = document.getElementById('pinsTbody');
+            const currentCount = tbody.querySelectorAll('tr').length;
+
+            try {
+                const res = await fetch(`/api/admin/pins?adminPin=${encodeURIComponent(ADMIN_PIN)}&offset=${encodeURIComponent(currentCount)}&limit=50`, { method: 'GET', credentials: 'same-origin' });
+                if (!res.ok) {
+                    const text = await res.text().catch(()=>null);
+                    throw new Error(text || ('Status ' + res.status));
+                }
+                const payload = await res.json();
+                const pins = payload.pins || [];
+                if (pins.length === 0) {
+                    alert('No more PINs to load');
+                     return;
+                }
+                const tbody = document.getElementById('pinsTbody');
+                pins.forEach((pin, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class='px-4 py-3'>${currentCount+idx+1}</td>
+                        <td class='px-4 py-3'>${pin.pin}</td>
+                        <td class='px-4 py-3'>${pin.status}</td>
+                        <td class='px-4 py-3'>${pin.usedAt || '-'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                showToast(`Loaded ${pins.length} more PINs`);
+            } catch(err) {
+                console.error('Failed to load more PINs', err);
+                alert('Error loading more PINs: ' + (err.message || err));
+            }
+        }
+
         // Helper to show specific view and update nav button styles
         function showView(v){
             if (v === 'live'){
                 btnLive.classList.add('bg-white'); btnLive.classList.remove('bg-indigo-600','text-white');
                 btnManage.classList.add('bg-indigo-600','text-white'); btnManage.classList.remove('bg-white');
-                viewLive.classList.remove('hidden'); viewManage.classList.add('hidden');
-            } else {
+                btnPins.classList.add('bg-white'); btnPins.classList.remove('bg-green-600','text-white');
+                viewLive.classList.remove('hidden'); viewManage.classList.add('hidden'); viewPins.classList.add('hidden');
+            } else if (v === 'manage') {
                 btnManage.classList.add('bg-indigo-600','text-white'); btnManage.classList.remove('bg-white');
                 btnLive.classList.remove('bg-indigo-600','text-white'); btnLive.classList.add('bg-white');
-                viewManage.classList.remove('hidden'); viewLive.classList.add('hidden');
+                btnPins.classList.add('bg-white'); btnPins.classList.remove('bg-green-600','text-white');
+                viewManage.classList.remove('hidden'); viewLive.classList.add('hidden'); viewPins.classList.add('hidden');
+            } else {
+                btnPins.classList.add('bg-green-600','text-white'); btnPins.classList.remove('bg-white');
+                btnManage.classList.remove('bg-indigo-600','text-white'); btnManage.classList.add('bg-white');
+                btnLive.classList.remove('bg-indigo-600','text-white'); btnLive.classList.add('bg-white');
+                viewPins.classList.remove('hidden'); viewLive.classList.add('hidden'); viewManage.classList.add('hidden');
             }
         }
 
         // initialize
         init();
 
-    })();
+        // Start periodic polling for live results every 5 seconds
+        // Keep a handle so we can clear it when the page unloads
+        const _livePollIntervalMs = 5000;
+        let _livePollHandle = null;
+        try {
+            _livePollHandle = setInterval(() => {
+                try {
+                    // Only poll when page is visible to reduce background work
+                    if (typeof document !== 'undefined' && document.visibilityState && document.visibilityState !== 'visible') return;
+                    if (typeof renderLiveResults === 'function') renderLiveResults();
+                } catch (e) { console.debug('Live poll error', e); }
+            }, _livePollIntervalMs);
+        } catch (e) { console.debug('Failed to start live polling', e); }
+
+        window.addEventListener('beforeunload', () => { if (_livePollHandle) clearInterval(_livePollHandle); });
+
+     })();
 
 </script>
 
 </body>
 
 </html>
+

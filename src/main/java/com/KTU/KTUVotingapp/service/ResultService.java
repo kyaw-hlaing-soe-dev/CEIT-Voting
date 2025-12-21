@@ -5,7 +5,6 @@ import com.KTU.KTUVotingapp.model.Candidate;
 import com.KTU.KTUVotingapp.model.Category;
 import com.KTU.KTUVotingapp.repository.CandidateRepository;
 import com.KTU.KTUVotingapp.repository.VoteRepository;
-import com.KTU.KTUVotingapp.repository.VoterRepository;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,14 +19,11 @@ public class ResultService {
 
     private final VoteRepository voteRepository;
     private final CandidateRepository candidateRepository;
-    private final VoterRepository voterRepository;
 
     public ResultService(VoteRepository voteRepository,
-                         CandidateRepository candidateRepository,
-                         VoterRepository voterRepository) {
+                         CandidateRepository candidateRepository) {
         this.voteRepository = voteRepository;
         this.candidateRepository = candidateRepository;
-        this.voterRepository = voterRepository;
     }
 
     @Cacheable(value = "results", key = "#category")
@@ -67,6 +63,6 @@ public class ResultService {
     }
 
     public long getTotalVoters() {
-        return voterRepository.countByHasVotedTrue();
+        return voteRepository.countDistinctVoters();
     }
 }

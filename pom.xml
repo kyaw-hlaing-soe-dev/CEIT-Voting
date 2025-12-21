@@ -96,11 +96,18 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- H2 for in-memory tests -->
+		<!-- H2 in-memory DB for tests -->
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 			<scope>test</scope>
+		</dependency>
+
+		<!-- Apache Commons CSV for CSV export capability -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-csv</artifactId>
+			<version>1.10.0</version>
 		</dependency>
 
 	</dependencies>

@@ -2,11 +2,10 @@ package com.KTU.KTUVotingapp.repository;
 
 import com.KTU.KTUVotingapp.model.Category;
 import com.KTU.KTUVotingapp.model.Vote;
-import com.KTU.KTUVotingapp.model.Voter;
+import com.KTU.KTUVotingapp.model.VoterPin;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,22 +17,21 @@ import java.util.Optional;
 @Repository
 public interface VoteRepository extends JpaRepository<Vote, Long> {
 
-    List<Vote> findByVoter(Voter voter);
+    List<Vote> findByVoterPin(VoterPin voterPin);
 
-    Optional<Vote> findByVoterAndCategory(Voter voter, Category category);
+    Optional<Vote> findByVoterPinAndCategory(VoterPin voterPin, Category category);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT v FROM Vote v WHERE v.voter = :voter AND v.category = :category")
-    Optional<Vote> findByVoterAndCategoryWithLock(@Param("voter") Voter voter, @Param("category") Category category);
+    @Query("SELECT v FROM Vote v WHERE v.voterPin = :voterPin AND v.category = :category")
+    Optional<Vote> findByVoterPinAndCategoryWithLock(@Param("voterPin") VoterPin voterPin, @Param("category") Category category);
 
-    boolean existsByVoterAndCategory(Voter voter, Category category);
+    boolean existsByVoterPinAndCategory(VoterPin voterPin, Category category);
 
-    boolean existsByVoter(Voter voter);
+    boolean existsByVoterPin(VoterPin voterPin);
 
     @Query("SELECT COUNT(v) FROM Vote v WHERE v.category = :category")
     long countByCategory(@Param("category") Category category);
 
-    @Modifying
     @Transactional
     @Query("DELETE FROM Vote v WHERE v.category = :category")
     int deleteByCategory(@Param("category") Category category);
@@ -41,6 +39,6 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
     @Query("SELECT COUNT(v) FROM Vote v WHERE v.candidate.id = :candidateId")
     long countByCandidateId(@Param("candidateId") Long candidateId);
 
-    @Query("SELECT COUNT(DISTINCT v.voter.id) FROM Vote v")
+    @Query("SELECT COUNT(DISTINCT v.voterPin.id) FROM Vote v")
     long countDistinctVoters();
 }

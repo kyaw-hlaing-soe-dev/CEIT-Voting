@@ -15,6 +15,15 @@
 
     <link rel="stylesheet" th:href="@{/styles.css}">
 
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        window.KTUVoting = window.KTUVoting || {};
+        var __adminPin = "[[${@environment.getProperty('voting.admin-pin')}]]";
+        if (!__adminPin || __adminPin === 'null') __adminPin = "[[${@environment.getProperty('voting.adminPin')}]]";
+        window.KTUVoting.adminPin = String(__adminPin || '').trim();
+        /*]]>*/
+    </script>
+
     <style>
         .pin-input {
             width: 44px;
@@ -101,52 +110,48 @@
 
             <h3 class="text-xl md:text-2xl font-bold text-gray-800 mb-2">Enter Your PIN</h3>
 
-            <p class="text-sm md:text-base text-gray-600">Please enter your 5-digit PIN to continue</p>
+            <p class="text-sm md:text-base text-gray-600">Please enter your 7-digit PIN to continue</p>
 
         </div>
 
 
         <div class="flex justify-center gap-3 md:gap-4 mb-6 md:mb-8">
-
             <input type="password" maxlength="1" class="pin-input" id="pin1" readonly aria-label="PIN digit 1">
-
             <input type="password" maxlength="1" class="pin-input" id="pin2" readonly aria-label="PIN digit 2">
-
             <input type="password" maxlength="1" class="pin-input" id="pin3" readonly aria-label="PIN digit 3">
-
             <input type="password" maxlength="1" class="pin-input" id="pin4" readonly aria-label="PIN digit 4">
-
             <input type="password" maxlength="1" class="pin-input" id="pin5" readonly aria-label="PIN digit 5">
-
+            <input type="password" maxlength="1" class="pin-input" id="pin6" readonly aria-label="PIN digit 6">
+            <input type="password" maxlength="1" class="pin-input" id="pin7" readonly aria-label="PIN digit 7">
         </div>
 
 
 
         <div class="grid grid-cols-3 gap-2 md:gap-3 mb-4" id="pin-keypad">
 
-            <button onclick="addPin('1')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">1</button>
+            <button data-digit="1" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">1</button>
 
-            <button onclick="addPin('2')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">2</button>
+            <button data-digit="2" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">2</button>
 
-            <button onclick="addPin('3')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">3</button>
+            <button data-digit="3" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">3</button>
 
-            <button onclick="addPin('4')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">4</button>
+            <button data-digit="4" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">4</button>
 
-            <button onclick="addPin('5')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">5</button>
+            <button data-digit="5" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">5</button>
 
-            <button onclick="addPin('6')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">6</button>
+            <button data-digit="6" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">6</button>
 
-            <button onclick="addPin('7')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">7</button>
+            <button data-digit="7" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">7</button>
 
-            <button onclick="addPin('8')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">8</button>
+            <button data-digit="8" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">8</button>
 
-            <button onclick="addPin('9')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">9</button>
+            <button data-digit="9" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">9</button>
 
-            <button onclick="clearPin()" class="bg-red-100 hover:bg-red-200 text-red-600 font-semibold py-3 md:py-4 rounded-xl transition text-sm md:text-base">Clear</button>
+            <button id="clear-key" class="bg-red-100 hover:bg-red-200 text-red-600 font-semibold py-3 md:py-4 rounded-xl transition text-sm md:text-base">Clear</button>
 
-            <button onclick="addPin('0')" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">0</button>
+            <button data-digit="0" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition">0</button>
 
-            <button onclick="deletePin()" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition" aria-label="Delete digit">←</button>
+            <button id="delete-key" class="keypad-key bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 md:py-4 rounded-xl transition" aria-label="Delete digit">←</button>
 
         </div>
 
@@ -214,10 +219,9 @@
     </div>
 </div>
 
-<script src="/js/fingerprint.js"></script>
 <script src="/js/voting.js"></script>
 <script>
-    const pinInputs = ['pin1', 'pin2', 'pin3', 'pin4', 'pin5'].map(id => document.getElementById(id));
+    const pinInputs = ['pin1', 'pin2', 'pin3', 'pin4', 'pin5', 'pin6', 'pin7'].map(id => document.getElementById(id));
     const pinLoadingOverlay = document.getElementById('pin-loading');
 
     // Web Audio API for keypad sound
@@ -261,8 +265,13 @@
         return pinInputs.map(i => i.value).join('');
     }
 
-    function addPin(digit) {
-        const btn = event?.currentTarget;
+    // debounce to prevent double-entry on some browsers (ignore events within 300ms)
+    let _lastKeyPressAt = 0;
+    function addPin(btn, digit) {
+        const now = Date.now();
+        if (now - _lastKeyPressAt < 300) return;
+        _lastKeyPressAt = now;
+        // btn is the button DOM element passed from the onclick handler
         playKeypadFeedback(btn);
         const target = firstEmpty();
         if (!target) return;
@@ -271,8 +280,9 @@
         if (pinInputs.every(i => i.value !== '')) handleContinue();
     }
 
-    function deletePin() {
-        const btn = event?.currentTarget;
+    function deletePin(btn) {
+        const now = Date.now();
+        if (now - _lastKeyPressAt < 300) return; _lastKeyPressAt = now;
         playKeypadFeedback(btn);
         for (let i = pinInputs.length - 1; i >= 0; i--) {
             if (pinInputs[i].value !== '') {
@@ -283,8 +293,9 @@
         }
     }
 
-    function clearPin() {
-        const btn = event?.currentTarget;
+    function clearPin(btn) {
+        const now = Date.now();
+        if (now - _lastKeyPressAt < 300) return; _lastKeyPressAt = now;
         playKeypadFeedback(btn);
         pinInputs.forEach(i => i.value = '');
         setActiveInput(pinInputs[0]);
@@ -304,41 +315,94 @@
     }));
 
     async function handleContinue() {
+         const pin = getEnteredPin();
+
+         // Try server-side admin validation first. If valid, redirect to admin dashboard.
+         try {
+             const apiBase = (window.VotingApp && window.VotingApp.API_BASE) ? window.VotingApp.API_BASE : (document.querySelector('meta[name="api-base"]')?.content || '/api');
+             const normalizedBase = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase;
+             const validateRes = await fetch(`${normalizedBase}/admin/validate?adminPin=${encodeURIComponent(pin)}`, { method: 'GET', credentials: 'same-origin' });
+             // Log status and body for debugging admin validation failures
+             try {
+                 const clone = validateRes.clone();
+                 const bodyText = await clone.text().catch(() => '');
+                 console.debug('admin/validate response', validateRes.status, bodyText);
+             } catch (ld) { console.debug('Failed to read validate response body', ld); }
+             if (validateRes.ok) {
+                 const json = await validateRes.json().catch(() => ({}));
+                 if (json && (json.valid || json.authenticated)) {
+                     console.info('Server validated admin PIN, redirecting to /admin-dashboard');
+                     // Server validated — ensure session cookie is active by checking /api/admin/session
+                     const maxRetries = 5;
+                     for (let attempt = 0; attempt < maxRetries; attempt++) {
+                         try {
+                             const sres = await fetch('/api/admin/session', { method: 'GET', credentials: 'same-origin' });
+                             if (sres.ok) {
+                                 const sj = await sres.json().catch(() => ({}));
+                                 if (sj && sj.authenticated) {
+                                     window.location.assign('/admin-dashboard');
+                                     return;
+                                 }
+                             }
+                         } catch (e) {
+                             console.debug('session check failed', e);
+                         }
+                         // small backoff
+                         await new Promise(r => setTimeout(r, 180));
+                     }
+                     // fallback: navigate anyway
+                     window.location.assign('/admin-dashboard');
+                      return;
+                 }
+             } else {
+                 // show server reason to user for easier debugging
+                 let serverMsg = '';
+                 try { serverMsg = await validateRes.text(); } catch(e) { serverMsg = String(e); }
+                 console.warn('Admin validate failed', validateRes.status, serverMsg);
+                 // show modal with server reply (safe escaped text)
+                 showError('Admin validation failed (HTTP ' + validateRes.status + '). ' + (serverMsg ? serverMsg : ''), 'Admin validation failed');
+                 return;
+             }
+         } catch (e) {
+             // If validation fails due to network or 403, continue to normal voter flow
+             console.debug('Admin validate call failed or returned 403; continuing voter flow', e);
+         }
+
+        // Check admin PIN first (client-side fallback): allow admin access regardless of entered length (support shorter configured adminPin)
+        const ADMIN_PIN = (window.KTUVoting && window.KTUVoting.adminPin) ? String(window.KTUVoting.adminPin).trim() : null;
+        console.debug('handleContinue: enteredPin=', pin, ' ADMIN_PIN=', ADMIN_PIN);
+        if (ADMIN_PIN) {
+            const adminPinStr = String(ADMIN_PIN);
+            const exactMatch = pin === adminPinStr;
+            const pinEndsWithAdmin = pin && adminPinStr && pin.endsWith && pin.endsWith(adminPinStr);
+            const adminEndsWithPin = pin && adminPinStr && adminPinStr.endsWith && adminPinStr.endsWith(pin);
+            if (exactMatch || pinEndsWithAdmin || adminEndsWithPin) {
+                console.info('Admin PIN matched (client fallback), redirecting to /admin-dashboard');
+                window.location.assign('/admin-dashboard');
+                return;
+            }
+        }
+
+        if (pin.length !== 7) {
+            showError('Please enter your 7-digit PIN.');
+            return;
+        }
+
         if (typeof VotingApp === 'undefined') {
             showError('Application not loaded properly. Please refresh the page.');
             return;
         }
-        const pin = getEnteredPin();
-        if (pin.length !== 5) {
-            showError('Please enter your 5-digit PIN.');
-            return;
-        }
+
         pinLoadingOverlay.classList.remove('hidden');
         try {
             const result = await VotingApp.verifyPin(pin);
             if (!result.valid) {
-                let message = 'The PIN you entered does not exist. Please try again.';
-                if (result.remainingAttempts !== undefined && result.remainingAttempts <= 3) {
-                    message += ` (${result.remainingAttempts} attempts remaining)`;
-                }
+                const message = result.message || 'The PIN you entered does not exist or is already used. Please try again.';
                 showError(message, 'Invalid PIN');
                 return;
             }
-            if (result.alreadyVoted) {
-                showError('This network/device has already been used to vote. Only one vote is allowed per network.', 'Already Voted');
-                return;
-            }
             VotingApp.savePin(pin);
-
-            // Store server-provided deviceId if available
-            if (result.deviceId) {
-                localStorage.setItem('deviceId', result.deviceId);
-            } else {
-                VotingApp.getDeviceId();
-            }
-
-            const isAdmin = (typeof result.isAdmin !== 'undefined') ? result.isAdmin : (result.role === 'admin');
-            window.location.assign(isAdmin ? '/admin-dashboard' : '/king-selection');
+            window.location.assign('/king-selection');
         } catch (err) {
             console.error('Error during verifyPin:', err);
             showError(err.message || 'Something went wrong while verifying your PIN.');
@@ -348,33 +412,93 @@
         }
     }
 
-    // Check if device already voted on page load
-    async function checkDeviceStatus() {
-        if (typeof VotingApp === 'undefined' || !VotingApp.checkDeviceStatus) {
-            console.log('VotingApp not available for device status check');
-            return;
-        }
-        try {
-            const data = await VotingApp.checkDeviceStatus();
-            if (data.hasVoted) {
-                showError('This network/device has already been used to vote. Only one vote is allowed per network.', 'Already Voted');
-            }
-        } catch (err) {
-            // Silently fail - device check is optional
-            console.log('Device check failed:', err);
-        }
-    }
+    // Disable legacy device status check
+    async function checkDeviceStatus() { return; }
 
     document.addEventListener('DOMContentLoaded', () => {
-        pinInputs.forEach((input, idx) => {
-            input.dataset.index = idx;
-            input.addEventListener('focus', () => input.blur());
-        });
-        setActiveInput(pinInputs[0]);
-        setTimeout(() => window.scrollTo(0, 0), 0);
+    pinInputs.forEach((input, idx) => {
+        input.dataset.index = idx;
+        input.addEventListener('focus', () => input.blur());
+    });
+    setActiveInput(pinInputs[0]);
+    setTimeout(() => window.scrollTo(0, 0), 0);
 
-        // Check device status on load
-        checkDeviceStatus();
+    // Browser Lock: if this browser was already used, hide keypad and show message
+    try {
+        if (window.VotingApp && typeof window.VotingApp.hasVoted === 'function' && window.VotingApp.hasVoted()) {
+            // Hide keypad and inputs
+            const keypad = document.getElementById('pin-keypad');
+            if (keypad) keypad.classList.add('hidden');
+            pinInputs.forEach(i => { i.value = ''; i.disabled = true; });
+            // Show friendly already-voted message
+            const overlay = document.createElement('div');
+            overlay.className = 'bg-white rounded-3xl p-6 md:p-12 max-w-md w-full card-shadow text-center';
+            overlay.innerHTML = '<h3 class="text-2xl font-bold text-gray-800 mb-2">You have already cast your vote</h3><p class="text-gray-600 mb-4">Thank you — multiple submissions are not allowed from the same device.</p>';
+            const parent = document.querySelector('.min-h-screen .max-w-md') || document.querySelector('.min-h-screen');
+            if (parent) {
+                parent.innerHTML = '';
+                parent.appendChild(overlay);
+            } else {
+                document.body.prepend(overlay);
+            }
+        }
+    } catch (e) { console.debug('hasVoted check failed', e); }
+
+    // If ?debugClearVoted=true is present in URL and an adminPin matches, enable a hidden reset button for testing
+    try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('debugClearVoted') === 'true') {
+            const btn = document.createElement('button');
+            btn.textContent = 'Reset voted flag (debug)';
+            btn.className = 'mt-4 px-3 py-2 rounded bg-yellow-100 border border-yellow-300';
+            btn.addEventListener('click', () => {
+                try { window.VotingApp.clearVotedFlag(); alert('Cleared voted flag'); } catch (e) { alert('Failed to clear voted flag'); }
+            });
+            const container = document.querySelector('.max-w-md');
+            if (container) container.appendChild(btn);
+        }
+    } catch (e) { console.debug('debugClearVoted check failed', e); }
+
+            // Attach pointer/click handlers to keypad buttons to ensure responsiveness on touch devices
+    try {
+        const keypad = document.getElementById('pin-keypad');
+        if (keypad) {
+            keypad.querySelectorAll('button').forEach(btn => {
+                if (btn.dataset._keypadAttached) return;
+                const txt = (btn.textContent || '').trim();
+
+                // pointerdown: primary handler for fast touch/click response
+                const onPointer = (e) => {
+                    try { e.preventDefault(); } catch (pe) {}
+                    // record timestamp so click fallback knows this was handled
+                    btn.dataset._handledAt = String(Date.now());
+                    if (txt === 'Clear') return clearPin(btn);
+                    if (txt === '←' || txt === '\u2190') return deletePin(btn);
+                    if (/^\d$/.test(txt)) return addPin(btn, txt);
+                };
+                btn.addEventListener('pointerdown', onPointer);
+
+                // click fallback: only invoke if pointerdown did not just handle it
+                btn.addEventListener('click', (e) => {
+                    try { e.preventDefault(); } catch (ce) {}
+                    const last = parseInt(btn.dataset._handledAt || '0', 10);
+                    const now = Date.now();
+                    if (now - last < 500) return; // pointerdown already handled
+                    // fallback for environments without pointer events
+                    if (txt === 'Clear') return clearPin(btn);
+                    if (txt === '←' || txt === '\u2190') return deletePin(btn);
+                    if (/^\d$/.test(txt)) return addPin(btn, txt);
+                }, { passive: false });
+
+                // Remove any inline onclick to avoid duplicate handlers
+                try { if (btn.getAttribute && btn.getAttribute('onclick')) btn.removeAttribute('onclick'); } catch (rmE) { /* ignore */ }
+
+                btn.dataset._keypadAttached = '1';
+            });
+        }
+    } catch (e) { console.debug('attachKeypadListeners failed', e); }
+
+    checkDeviceStatus();
     });
 </script>
 

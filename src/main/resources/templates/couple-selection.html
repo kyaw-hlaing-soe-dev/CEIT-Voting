@@ -110,14 +110,13 @@
         </div>
     </div>
 
-    <script src="/js/fingerprint.js"></script>
     <script src="/js/voting.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', () => {
             if (typeof VotingApp !== 'undefined' && VotingApp.initSelectionPage) {
                 VotingApp.initSelectionPage({
                     category: 'COUPLE',
-                    nextUrl: '/summary',
+                    nextUrl: '/success',
                     prevUrl: '/princess-selection'
                 });
             } else {

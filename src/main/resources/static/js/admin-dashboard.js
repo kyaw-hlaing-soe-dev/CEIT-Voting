@@ -6,7 +6,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultsTableBody = document.querySelector("#results-table tbody");
 
     const API_BASE = "/api/admin";
-    const ADMIN_PIN = (window.KTUVoting && window.KTUVoting.adminPin) ? String(window.KTUVoting.adminPin) : "88296";
+    // Prefer server-injected admin pin (from application.yml via Thymeleaf); fall back to a safe 7-digit default if missing
+    const ADMIN_PIN = (window.KTUVoting && window.KTUVoting.adminPin) ? String(window.KTUVoting.adminPin) : "8829654";
 
     document.getElementById("pinSubmit").addEventListener("click", async () => {
         const pin = pinInput.value;
@@ -31,8 +32,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 const response = await fetch(`${API_BASE}/results?adminPin=${ADMIN_PIN}`);
                 if (!response.ok) throw new Error("Failed to fetch results");
 
-                const results = await response.json();
-                updateResultsTable(results);
+                const payload = await response.json();
+                // backend may return either an array of candidates or an object { candidates: [], stats: {...} }
+                let candidates = [];
+                if (Array.isArray(payload)) {
+                    candidates = payload;
+                } else if (payload && Array.isArray(payload.candidates)) {
+                    candidates = payload.candidates;
+                } else if (payload && Array.isArray(payload.results)) {
+                    // some endpoints may return 'results' array
+                    candidates = payload.results;
+                } else {
+                    console.warn('Unexpected results payload shape', payload);
+                    candidates = [];
+                }
+                updateResultsTable(candidates);
                 document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
             } catch (error) {
                 console.error("Error fetching live results:", error);
@@ -49,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td class="p-2 border">${candidate.name}</td>
                 <td class="p-2 border">${candidate.department || ''}</td>
                 <td class="p-2 border">${candidate.category}</td>
-                <td class="p-2 border">${candidate.voteCount}</td>
+                <td class="p-2 border">${candidate.voteCount ?? candidate.votes ?? candidate.vote_count ?? 0}</td>
             `;
             resultsTableBody.appendChild(row);
         });
@@ -174,3 +188,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 });
+
+// Legacy admin-dashboard static helper removed to avoid conflicting behavior with the inline dashboard script in the template.
+// The inline script inside `templates/admin-dashboard.html` now owns all dashboard rendering and polling.
+
+console.info('admin-dashboard.js is intentionally disabled; inline template script handles the dashboard.');
