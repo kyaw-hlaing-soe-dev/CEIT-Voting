@@ -1,6 +1,7 @@
 package com.KTU.KTUVotingapp.controller;
 
 import com.KTU.KTUVotingapp.dto.ResultDTO;
+import com.KTU.KTUVotingapp.exception.ResourceNotFoundException;
 import com.KTU.KTUVotingapp.exception.RankingConflictException;
 import com.KTU.KTUVotingapp.model.Candidate;
 import com.KTU.KTUVotingapp.model.Category;
@@ -10,10 +11,9 @@ import com.KTU.KTUVotingapp.service.ImageStorageService;
 import com.KTU.KTUVotingapp.dto.CandidateForm;
 import com.KTU.KTUVotingapp.service.CandidateService;
 import com.KTU.KTUVotingapp.repository.AdminActionAuditRepository;
-import com.KTU.KTUVotingapp.service.PinService;
+import com.KTU.KTUVotingapp.model.AdminActionAudit;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.domain.Page;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -21,11 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.dao.DataIntegrityViolationException;
 
-import jakarta.servlet.http.HttpSession;
-import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -35,7 +32,6 @@ import java.util.Map;
 public class AdminController {
 
     private final ResultService resultService;
-    private static final Logger log = LoggerFactory.getLogger(AdminController.class);
 
     // adminPin will be injected from application properties (voting.admin-pin)
     private final String adminPin;
@@ -49,10 +45,6 @@ public class AdminController {
 
     private final AdminActionAuditRepository auditRepository;
 
-    private final PinService pinService;
-
-    private final com.KTU.KTUVotingapp.service.AdminService adminService;
-
     private static final int MIN_CANDIDATE_NUMBER = 1;
     private static final int MAX_CANDIDATE_NUMBER = 10;
 
@@ -65,43 +57,71 @@ public class AdminController {
         }
     }
 
-    public AdminController(ResultService resultService, CandidateRepository candidateRepository, ImageStorageService imageStorageService, CandidateService candidateService, AdminActionAuditRepository auditRepository, PinService pinService, com.KTU.KTUVotingapp.service.AdminService adminService, @Value("${voting.admin-pin:}") String adminPin) {
+    public AdminController(ResultService resultService, CandidateRepository candidateRepository, ImageStorageService imageStorageService, CandidateService candidateService, AdminActionAuditRepository auditRepository, @Value("${voting.admin-pin}") String adminPin) {
         this.resultService = resultService;
-        this.adminPin = (adminPin == null ? "" : adminPin.trim());
+        this.adminPin = adminPin;
         this.candidateRepository = candidateRepository;
         this.imageStorageService = imageStorageService;
         this.candidateService = candidateService;
         this.auditRepository = auditRepository;
-        this.pinService = pinService;
-        this.adminService = adminService;
-
-        // Do not throw during startup if adminPin missing; log a warning so the admin dashboard can show a proper message.
-        if (this.adminPin.isBlank()) {
-            log.warn("voting.admin-pin not configured; admin endpoints require either an adminPin query parameter or a validated admin session.");
-        } else if (!this.adminPin.matches("^\\d{7}$")) {
-            log.warn("voting.admin-pin value '{}' does not match expected 7-digit pattern; admin endpoints will still require this exact value or a validated session.", this.adminPin);
-        }
     }
 
     /**
-     * Live admin stats and flattened candidate results for dashboard polling.
-     * Accepts either an adminPin query parameter OR an authenticated admin session
-     * created via /api/admin/validate. This avoids a 400 response when adminPin
-     * is omitted and supports both session-based and one-shot pin auth.
+     * Returns aggregated vote counts in the shape:
+     * {
+     *   "KING": {"1": 10, "2": 5, ...},
+     *   "QUEEN": {"1": 3, ...},
+     *   ...
+     * }
+     * Requires adminPin query parameter for a basic auth check.
      */
     @GetMapping("/results")
-    public ResponseEntity<?> getLiveAdminResults(@RequestParam(value = "adminPin", required = false) String adminPinParam,
-                                                 @RequestParam(value = "pin", required = false) String legacyPinParam,
-                                                 HttpSession session) {
-        // Prefer the explicit adminPin param, but accept legacy "pin" param for backward compatibility
-        String pin = adminPinParam != null ? adminPinParam : legacyPinParam;
+    public ResponseEntity<?> getResults(@RequestParam("adminPin") String pin) {
+        if (pin == null || !pin.equals(adminPin)) {
+            return ResponseEntity.status(403).body("Forbidden");
+        }
 
-        boolean authorized = false;
-        if (pin != null && pin.equals(adminPin)) authorized = true;
-        if (!authorized && isAdminSessionAuthenticated(session)) authorized = true;
-        if (!authorized) return ResponseEntity.status(403).body("Forbidden");
+        Map<String, Map<Integer, Long>> results = new LinkedHashMap<>();
 
-        // Build stats payload
+        // For each category, collect counts for candidate numbers
+        for (Category category : Category.values()) {
+            ResultDTO categoryResults = resultService.getResultsByCategory(category);
+            Map<Integer, Long> counts = new LinkedHashMap<>();
+            
+            for (ResultDTO.CandidateResultDTO candidate : categoryResults.getCandidates()) {
+                counts.put(candidate.getCandidateNumber(), candidate.getVoteCount());
+            }
+            
+            results.put(category.name(), counts);
+        }
+
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Get detailed results for all categories (with percentages).
+     * Requires adminPin query parameter for a basic auth check.
+     */
+    @GetMapping("/results/detailed")
+    public ResponseEntity<?> getDetailedResults(@RequestParam("adminPin") String pin) {
+        if (pin == null || !pin.equals(adminPin)) {
+            return ResponseEntity.status(403).body("Forbidden");
+        }
+
+        List<ResultDTO> results = resultService.getAllResults();
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Live admin flattened candidate results for dashboard polling.
+     * GET /api/admin/results?adminPin=99999
+     */
+    @GetMapping(value = "/results", params = "adminPin")
+    public ResponseEntity<Map<String, Object>> getLiveAdminResults(@RequestParam("adminPin") String pin) {
+        if (pin == null || !pin.equals(adminPin)) {
+            return ResponseEntity.status(403).build();
+        }
+
         java.util.List<ResultDTO> all = resultService.getAllResults();
         java.util.List<ResultDTO.CandidateResultDTO> candidates = all.stream()
                 .flatMap(r -> r.getCandidates().stream())
@@ -162,11 +182,11 @@ public class AdminController {
 
             return ResponseEntity.ok(response);
         } catch (RankingConflictException rce) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "RANK_CONFLICT", "message", rce.getMessage()));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","RANK_CONFLICT","message", rce.getMessage()));
         } catch (DataIntegrityViolationException dive) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "CONFLICT", "message", "Candidate number already in use in this category"));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","CONFLICT","message","Candidate number already in use in this category"));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "CREATE_FAILED", "message", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error","CREATE_FAILED","message", e.getMessage()));
         }
     }
 
@@ -198,15 +218,15 @@ public class AdminController {
             try {
                 validateCandidateNumberOrThrow(candidate.getCandidateNumber());
             } catch (IllegalArgumentException ex) {
-                return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error", "INVALID_NUMBER", "message", ex.getMessage()));
+                return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error","INVALID_NUMBER","message",ex.getMessage()));
             }
             com.KTU.KTUVotingapp.model.Candidate saved = null;
             try {
                 saved = candidateService.createCandidateTransactional(candidate);
             } catch (RankingConflictException rce) {
-                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "RANK_CONFLICT", "message", rce.getMessage()));
+                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","RANK_CONFLICT","message", rce.getMessage()));
             } catch (DataIntegrityViolationException dive) {
-                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "CONFLICT", "message", "Candidate number already in use in this category"));
+                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","CONFLICT","message","Candidate number already in use in this category"));
             }
 
             com.KTU.KTUVotingapp.dto.CandidateDTO response = new com.KTU.KTUVotingapp.dto.CandidateDTO(
@@ -265,11 +285,11 @@ public class AdminController {
             );
             return ResponseEntity.ok(response);
         } catch (RankingConflictException rce) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "RANK_CONFLICT", "message", rce.getMessage()));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","RANK_CONFLICT","message", rce.getMessage()));
         } catch (DataIntegrityViolationException dive) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "CONFLICT", "message", "Candidate number already in use in this category"));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","CONFLICT","message","Candidate number already in use in this category"));
         } catch (IllegalArgumentException iae) {
-            return ResponseEntity.badRequest().body(Map.of("error", "INVALID_NUMBER", "message", iae.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error","INVALID_NUMBER","message", iae.getMessage()));
         }
     }
 
@@ -306,11 +326,11 @@ public class AdminController {
 
                 return org.springframework.http.ResponseEntity.ok(response);
             } catch (RankingConflictException rce) {
-                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "RANK_CONFLICT", "message", rce.getMessage()));
+                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","RANK_CONFLICT","message", rce.getMessage()));
             } catch (DataIntegrityViolationException dive) {
-                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "CONFLICT", "message", "Candidate number already in use in this category"));
+                return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error","CONFLICT","message","Candidate number already in use in this category"));
             } catch (IllegalArgumentException iae) {
-                return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error", "INVALID_NUMBER", "message", iae.getMessage()));
+                return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error","INVALID_NUMBER","message", iae.getMessage()));
             }
         } catch (Exception e) {
             return org.springframework.http.ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -383,139 +403,5 @@ public class AdminController {
         PageRequest pr = PageRequest.of(0, pageSize, Sort.by(Sort.Direction.DESC, "performedAt"));
         var page = auditRepository.findAll(pr);
         return ResponseEntity.ok(page.getContent());
-    }
-
-    // PIN management endpoints (placeholders)
-    @PostMapping("/pin/generate")
-    public ResponseEntity<?> generatePins(@RequestParam("adminPin") String pin,
-                                          @RequestParam("count") int count) {
-        if (!adminPin.equals(pin)) {
-            return ResponseEntity.status(403).body(Map.of("message", "Forbidden"));
-        }
-        if (count <= 0 || count > 20000) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Count must be between 1 and 20000"));
-        }
-        var pins = adminService.generatePins(count);
-        return ResponseEntity.ok(Map.of("generated", pins.size(), "pins", pins));
-    }
-
-    @GetMapping("/pin")
-    public ResponseEntity<?> listPins(@RequestParam("adminPin") String pin,
-                                      @RequestParam(value = "page", defaultValue = "0") int page,
-                                      @RequestParam(value = "size", defaultValue = "50") int size) {
-        if (!adminPin.equals(pin)) {
-            return ResponseEntity.status(403).body(Map.of("message", "Forbidden"));
-        }
-        Page<com.KTU.KTUVotingapp.model.VoterPin> result = pinService.listPins(page, Math.min(size, 500));
-        return ResponseEntity.ok(result);
-    }
-
-    @GetMapping("/pins")
-    public ResponseEntity<?> listPinsPaginated(@RequestParam("adminPin") String pin,
-                                               @RequestParam(value = "page", defaultValue = "0") int page,
-                                               @RequestParam(value = "size", defaultValue = "50") int size,
-                                               @RequestParam(value = "search", required = false) String search) {
-        if (!adminPin.equals(pin)) return ResponseEntity.status(403).body(Map.of("message", "Forbidden"));
-        var paged = pinService.listPins(page, Math.min(size, 1000));
-        // If search provided, filter client-side by pinCode (fast enough for moderate sizes) — for large data implement repository search
-        if (search != null && !search.isBlank()) {
-            var filtered = paged.getContent().stream().filter(p -> p.getPinCode().contains(search)).toList();
-            Map<String, Object> payload = Map.of("total", filtered.size(), "pins", filtered);
-            return ResponseEntity.ok(payload);
-        }
-        return ResponseEntity.ok(paged);
-    }
-
-    @GetMapping(value = "/pin/export", produces = "text/csv")
-    public ResponseEntity<String> exportPins(@RequestParam("adminPin") String pin) throws java.io.IOException {
-        if (!adminPin.equals(pin)) {
-            return ResponseEntity.status(403).body("Forbidden");
-        }
-        String csv = adminService.exportPinsCsv();
-        return ResponseEntity.ok()
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=pin-export.csv")
-                .contentType(org.springframework.http.MediaType.valueOf("text/csv"))
-                .body(csv);
-    }
-
-    @GetMapping(value = "/pins/export", produces = "text/csv")
-    public ResponseEntity<org.springframework.core.io.InputStreamResource> exportPinsCsv(@RequestParam("adminPin") String pin) throws java.io.IOException {
-        if (!adminPin.equals(pin)) return ResponseEntity.status(403).build();
-        String csv = adminService.exportPinsCsv();
-        byte[] bytes = csv.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(bytes);
-        org.springframework.core.io.InputStreamResource resource = new org.springframework.core.io.InputStreamResource(bais);
-        return ResponseEntity.ok()
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=pin-export.csv")
-                .contentLength(bytes.length)
-                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv; charset=utf-8"))
-                .body(resource);
-    }
-
-    // New endpoints for pin management
-    @PostMapping("/pins/generate")
-    public ResponseEntity<?> generatePinsBulk(@RequestParam("adminPin") String pin,
-                                              @RequestParam("count") int count) {
-        if (!adminPin.equals(pin)) return ResponseEntity.status(403).body(Map.of("message", "Forbidden"));
-        if (count <= 0 || count > 100000) return ResponseEntity.badRequest().body(Map.of("message", "Count must be between 1 and 100000"));
-        List<String> generated = adminService.generatePins(count);
-        return ResponseEntity.ok(Map.of("generatedCount", generated.size()));
-    }
-
-    @GetMapping("/pins/search")
-    public ResponseEntity<?> searchPins(@RequestParam("adminPin") String pin,
-                                        @RequestParam("query") String query) {
-        if (!adminPin.equals(pin)) return ResponseEntity.status(403).body(Map.of("message", "Forbidden"));
-        if (query == null || query.isBlank()) return ResponseEntity.badRequest().body(Map.of("message", "Query required"));
-        // naive search: iterate all pins and filter by contains; for large datasets implement repository method
-        List<com.KTU.KTUVotingapp.model.VoterPin> all = pinService.listAllPins();
-        var filtered = all.stream().filter(p -> p.getPinCode().contains(query)).map(p -> Map.of("pin", p.getPinCode(), "status", p.isUsed() ? "Used" : "Active", "usedAt", p.getUsedAt())).toList();
-        return ResponseEntity.ok(Map.of("pins", filtered));
-    }
-
-    @GetMapping(value = "/pins", params = {"adminPin", "offset", "limit"})
-    public ResponseEntity<?> listPinsOffset(@RequestParam("adminPin") String pin,
-                                            @RequestParam("offset") int offset,
-                                            @RequestParam("limit") int limit) {
-        if (!adminPin.equals(pin)) return ResponseEntity.status(403).body(Map.of("message", "Forbidden"));
-        if (offset < 0 || limit <= 0) return ResponseEntity.badRequest().body(Map.of("message", "Invalid offset/limit"));
-        List<com.KTU.KTUVotingapp.model.VoterPin> all = pinService.listAllPins();
-        int from = Math.min(offset, all.size());
-        int to = Math.min(offset + limit, all.size());
-        var sub = all.subList(from, to).stream().map(p -> Map.of("pin", p.getPinCode(), "status", p.isUsed() ? "Used" : "Active", "usedAt", p.getUsedAt())).toList();
-        return ResponseEntity.ok(Map.of("pins", sub));
-    }
-
-    @GetMapping("/validate")
-    public ResponseEntity<?> validateAdmin(@RequestParam("adminPin") String pin, HttpSession session) {
-        if (pin == null || !pin.equals(adminPin)) {
-            return ResponseEntity.status(403).body("Forbidden");
-        }
-        // mark session authenticated for subsequent admin requests
-        if (session != null) {
-            session.setAttribute("adminAuthenticated", Boolean.TRUE);
-        }
-        return ResponseEntity.ok(Map.of("authenticated", true));
-    }
-
-    // helper used by some endpoints isAdminAuthenticated (optional)
-    private boolean isAdminSessionAuthenticated(HttpSession session) {
-        return session != null && Boolean.TRUE.equals(session.getAttribute("adminAuthenticated"));
-    }
-
-    @GetMapping("/session")
-    public ResponseEntity<?> checkAdminSession(HttpSession session) {
-        boolean auth = Boolean.TRUE.equals(session.getAttribute("adminAuthenticated"));
-        return ResponseEntity.ok(Map.of("authenticated", auth));
-    }
-
-    // Debug endpoint to inspect whether an adminPin is configured (does NOT reveal the pin value). Safe for dev.
-    @GetMapping("/debug/config")
-    public ResponseEntity<?> debugConfig(HttpServletRequest request) {
-        // Return non-sensitive debug information about whether an adminPin is configured.
-        Map<String, Object> info = new HashMap<>();
-        info.put("adminPinConfigured", !this.adminPin.isBlank());
-        info.put("adminPinLength", this.adminPin.length());
-        return ResponseEntity.ok(info);
     }
 }

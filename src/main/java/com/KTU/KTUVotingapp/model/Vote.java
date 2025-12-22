@@ -7,13 +7,13 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "votes",
     indexes = {
-        @Index(name = "idx_pin_id", columnList = "pin_id"),
+        @Index(name = "idx_voter_id", columnList = "voter_id"),
         @Index(name = "idx_category", columnList = "category"),
         @Index(name = "idx_candidate_id", columnList = "candidate_id"),
-        @Index(name = "idx_pin_category", columnList = "pin_id, category")
+        @Index(name = "idx_voter_category", columnList = "voter_id, category")
     },
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_pin_category", columnNames = {"pin_id", "category"})
+        @UniqueConstraint(name = "uk_voter_category", columnNames = {"voter_id", "category"})
     }
 )
 public class Vote {
@@ -22,9 +22,9 @@ public class Vote {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(optional = true, fetch = FetchType.LAZY)
-    @JoinColumn(name = "pin_id", nullable = true)
-    private VoterPin voterPin;
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "voter_id", nullable = false)
+    private Voter voter;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "candidate_id", nullable = false)
@@ -44,8 +44,8 @@ public class Vote {
     public Vote() {
     }
 
-    public Vote(VoterPin voterPin, Candidate candidate, Category category) {
-        this.voterPin = voterPin;
+    public Vote(Voter voter, Candidate candidate, Category category) {
+        this.voter = voter;
         this.candidate = candidate;
         this.category = category;
         // ensure candidateNumber is populated when a Candidate is provided
@@ -56,12 +56,12 @@ public class Vote {
         return id;
     }
 
-    public VoterPin getVoterPin() {
-        return voterPin;
+    public Voter getVoter() {
+        return voter;
     }
 
-    public void setVoterPin(VoterPin voterPin) {
-        this.voterPin = voterPin;
+    public void setVoter(Voter voter) {
+        this.voter = voter;
     }
 
     public Candidate getCandidate() {

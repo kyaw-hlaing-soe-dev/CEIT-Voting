@@ -152,14 +152,14 @@
         </div>
     </div>
 
+    <script src="/js/fingerprint.js"></script>
     <script src="/js/voting.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', function() {
             if (typeof VotingApp !== 'undefined' && VotingApp.initSelectionPage) {
                 VotingApp.initSelectionPage({
                     category: 'KING',
-                    nextUrl: '/queen-selection',
-                    prevUrl: '/pin'
+                    nextUrl: '/queen-selection'
                 });
             } else {
                 console.error('VotingApp not loaded properly');

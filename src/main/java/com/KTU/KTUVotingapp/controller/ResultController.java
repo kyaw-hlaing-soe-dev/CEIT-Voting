@@ -46,16 +46,12 @@ public class ResultController {
     }
 
     /**
-     * Live admin flattened candidate results for dashboard polling.
-     * Legacy endpoint (renamed to avoid collision). Use /api/admin/results (AdminController) for real admin dashboard.
-     * GET /api/admin/results-legacy?pin={pin}
+     * Get live admin results - secured endpoint.
+     * GET /api/admin/results?pin={pin}
      */
-    // NOTE: this method previously used an absolute path beginning with /api which resulted in
-    // the effective path becoming /api/results/api/admin/results-legacy due to the class-level
-    // @RequestMapping("/api/results"). Use a relative path here to avoid confusion.
-    @GetMapping("/admin/results-legacy")
-    public ResponseEntity<java.util.List<ResultDTO.CandidateResultDTO>> getLiveAdminResultsLegacy(@RequestParam(value = "pin", required = false) String pin) {
-        // Keep legacy behavior: allow a particular hardcoded pin '99999' for backward compatibility.
+    @GetMapping("/api/admin/results")
+    public ResponseEntity<java.util.List<ResultDTO.CandidateResultDTO>> getLiveAdminResults(@RequestParam("pin") String pin) {
+        // Simple hardcoded PIN check as requested
         if (pin == null || !pin.equals("99999")) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN);
         }

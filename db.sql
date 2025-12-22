@@ -11,13 +11,16 @@
 -- \c ktuvoting
 
 -- 2) Tables
--- Voters: tracks vote session per PIN (legacy fields retained for compatibility)
+-- Voters: tracks PIN/device binding and voting status
+-- PIN can be shared across multiple devices (one PIN for all users)
+-- Device ID is unique to prevent duplicate votes from same device
+-- Fingerprint is client-side hardware fingerprint for robust device identification
 CREATE TABLE IF NOT EXISTS voters (
     id           BIGSERIAL PRIMARY KEY,
-    pin          VARCHAR(7)  NOT NULL,
+    pin          VARCHAR(5)  NOT NULL,
     device_id    VARCHAR(255) NOT NULL UNIQUE,
     user_agent   VARCHAR(512),
-    ip_address   VARCHAR(45),
+    fingerprint  VARCHAR(64),
     has_voted    BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at   TIMESTAMP    NOT NULL DEFAULT NOW(),
     voted_at     TIMESTAMP
@@ -26,33 +29,8 @@ CREATE INDEX IF NOT EXISTS idx_pin       ON voters(pin);
 CREATE INDEX IF NOT EXISTS idx_has_voted ON voters(has_voted);
 CREATE INDEX IF NOT EXISTS idx_device_id ON voters(device_id);
 
--- New: 7-digit paper PIN pool
-CREATE TABLE IF NOT EXISTS voter_pins (
-    id         BIGSERIAL PRIMARY KEY,
-    pin        VARCHAR(7) NOT NULL,
-    is_used    BOOLEAN    NOT NULL DEFAULT FALSE,
-    used_at    TIMESTAMP,
-    created_at TIMESTAMP  NOT NULL DEFAULT NOW(),
-    CONSTRAINT uk_voter_pins_pin UNIQUE (pin)
-);
-CREATE INDEX IF NOT EXISTS idx_voter_pins_pin  ON voter_pins(pin);
-CREATE INDEX IF NOT EXISTS idx_voter_pins_used ON voter_pins(is_used);
-
--- New: session tokens issued after PIN validation
-CREATE TABLE IF NOT EXISTS pin_sessions (
-    id          BIGSERIAL PRIMARY KEY,
-    pin_id      BIGINT NOT NULL REFERENCES voter_pins(id) ON DELETE CASCADE,
-    token       VARCHAR(64) NOT NULL UNIQUE,
-    created_at  TIMESTAMP   NOT NULL DEFAULT NOW(),
-    expires_at  TIMESTAMP   NOT NULL,
-    consumed_at TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_pin_sessions_token      ON pin_sessions(token);
-CREATE INDEX IF NOT EXISTS idx_pin_sessions_pin_id     ON pin_sessions(pin_id);
-CREATE INDEX IF NOT EXISTS idx_pin_sessions_expires_at ON pin_sessions(expires_at);
-
 -- Candidates: contestants grouped by category
-CREATE TABLE IF NOT EXISTS candidates (
+CREATE INDEX IF NOT EXISTS idx_fingerprint ON voters(fingerprint);
     id               BIGSERIAL PRIMARY KEY,
     category         VARCHAR(20)  NOT NULL,
     candidate_number INTEGER      NOT NULL,
@@ -64,20 +42,21 @@ CREATE TABLE IF NOT EXISTS candidates (
 );
 CREATE INDEX IF NOT EXISTS idx_category_number ON candidates(category, candidate_number);
 
--- Votes: one vote per pin per category
+-- Votes: one vote per voter per category
 CREATE TABLE IF NOT EXISTS votes (
     id           BIGSERIAL PRIMARY KEY,
-    pin_id       BIGINT NOT NULL REFERENCES voter_pins(id) ON DELETE RESTRICT,
+    voter_id     BIGINT NOT NULL REFERENCES voters(id) ON DELETE RESTRICT,
     candidate_id BIGINT NOT NULL REFERENCES candidates(id) ON DELETE RESTRICT,
     category     VARCHAR(20) NOT NULL,
     created_at   TIMESTAMP   NOT NULL DEFAULT NOW(),
-    CONSTRAINT uk_pin_category UNIQUE (pin_id, category)
+    CONSTRAINT uk_voter_category UNIQUE (voter_id, category)
 );
-CREATE INDEX IF NOT EXISTS idx_pin_id       ON votes(pin_id);
-CREATE INDEX IF NOT EXISTS idx_candidate_id ON votes(candidate_id);
-CREATE INDEX IF NOT EXISTS idx_category     ON votes(category);
-CREATE INDEX IF NOT EXISTS idx_pin_category ON votes(pin_id, category);
+CREATE INDEX IF NOT EXISTS idx_voter_id      ON votes(voter_id);
+CREATE INDEX IF NOT EXISTS idx_candidate_id  ON votes(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_category      ON votes(category);
+CREATE INDEX IF NOT EXISTS idx_voter_category ON votes(voter_id, category);
 
+-- 3) Seed candidates (idempotent)
 -- 3) Seed candidates (idempotent)
 INSERT INTO candidates (category, candidate_number, name, department, image_url, vote_count)
 VALUES
@@ -148,3 +127,4 @@ WHERE NOT EXISTS (SELECT 1 FROM voters WHERE pin = '20267' LIMIT 1);
 -- SELECT * FROM candidates;
 -- SELECT * FROM voters;
 -- The application endpoints under /api should now read/write against this schema.
+
