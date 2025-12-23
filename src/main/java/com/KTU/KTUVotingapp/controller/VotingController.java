@@ -7,9 +7,13 @@ import com.KTU.KTUVotingapp.model.Category;
 import com.KTU.KTUVotingapp.service.VotingService;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,13 +40,13 @@ public class VotingController {
      * Response: { "success": true, "message": "Vote submitted successfully" }
      */
     @PostMapping("/vote")
-    public ResponseEntity<VoteResponse> submitVote(@Valid @RequestBody VoteRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<VoteResponse> submitVote(@Valid @RequestBody VoteRequest request,
+                                                   HttpServletRequest httpRequest,
+                                                   HttpServletResponse httpResponse) {
         try {
-            // Prefer server-side device cookie; otherwise derive from IP+UA hash
-            String resolvedDeviceId = resolveDeviceId(httpRequest);
-            if (resolvedDeviceId != null && !resolvedDeviceId.isBlank()) {
-                request.setDeviceId(resolvedDeviceId);
-            }
+            // Resolve or derive a stable device ID before validation in service
+            String resolvedDeviceId = resolveDeviceId(httpRequest, httpResponse);
+            request.setDeviceId(resolvedDeviceId);
             // Set User-Agent and IP for tracking
             request.setUserAgent(getUserAgent(httpRequest));
             request.setIpAddress(getClientIpAddress(httpRequest));
@@ -63,13 +67,13 @@ public class VotingController {
      * Request: { "deviceId": "...", "pin": "12345", "votes": [{ "category": "KING", "candidateNumber": 1 }, ...] }
      */
     @PostMapping("/bulk-vote")
-    public ResponseEntity<VoteResponse> submitBulkVotes(@Valid @RequestBody BulkVoteRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<VoteResponse> submitBulkVotes(@Valid @RequestBody BulkVoteRequest request,
+                                                        HttpServletRequest httpRequest,
+                                                        HttpServletResponse httpResponse) {
         try {
-            // Prefer server-side device cookie; otherwise derive from IP+UA hash
-            String resolvedDeviceId = resolveDeviceId(httpRequest);
-            if (resolvedDeviceId != null && !resolvedDeviceId.isBlank()) {
-                request.setDeviceId(resolvedDeviceId);
-            }
+            // Resolve or derive a stable device ID before validation in service
+            String resolvedDeviceId = resolveDeviceId(httpRequest, httpResponse);
+            request.setDeviceId(resolvedDeviceId);
             // Set User-Agent and IP for tracking
             request.setUserAgent(getUserAgent(httpRequest));
             request.setIpAddress(getClientIpAddress(httpRequest));
@@ -126,12 +130,31 @@ public class VotingController {
     }
 
     /**
-     * Resolve device ID using IP + User-Agent hash.
-     * This helps identify unique devices even on the same network.
+     * Resolve device ID with precedence: existing cookie -> IP+UA derived
+     * Persist it back into an HttpOnly cookie for reuse.
      */
-    private String resolveDeviceId(HttpServletRequest request) {
-        // Use IP + User-Agent based ID for better device fingerprinting
-        return deriveDeviceId(request);
+    private String resolveDeviceId(HttpServletRequest request, HttpServletResponse response) {
+        if (request == null) {
+            return "dev-" + UUID.randomUUID();
+        }
+        String cookieDeviceId = Arrays.stream(request.getCookies() != null ? request.getCookies() : new Cookie[0])
+                .filter(c -> "voting_device_id".equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
+
+        String derived = deriveDeviceId(request);
+        String deviceId = (cookieDeviceId != null && !cookieDeviceId.isBlank()) ? cookieDeviceId : derived;
+
+        // Write back persistent cookie to help future requests (especially Safari where storage may be cleared)
+        Cookie deviceCookie = new Cookie("voting_device_id", deviceId);
+        deviceCookie.setMaxAge(365 * 24 * 60 * 60);
+        deviceCookie.setPath("/");
+        deviceCookie.setHttpOnly(true);
+        deviceCookie.setSecure(request.isSecure());
+        response.addCookie(deviceCookie);
+
+        return deviceId;
     }
 
     /**

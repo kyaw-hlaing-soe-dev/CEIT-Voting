@@ -9,7 +9,7 @@ import java.util.List;
 
 public class BulkVoteRequest {
 
-    @NotBlank(message = "Device ID is required")
+    // Device ID may be omitted; server will derive a stable ID if missing
     private String deviceId;
 
     @NotBlank(message = "PIN is required")
@@ -120,4 +120,3 @@ public class BulkVoteRequest {
         }
     }
 }
-

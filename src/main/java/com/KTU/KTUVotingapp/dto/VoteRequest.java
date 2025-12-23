@@ -6,7 +6,7 @@ import com.KTU.KTUVotingapp.model.Category;
 
 public class VoteRequest {
 
-    @NotBlank(message = "Device ID is required")
+    // Device ID can be supplied by client but will be derived server-side if missing
     private String deviceId;
 
     @NotBlank(message = "PIN is required")

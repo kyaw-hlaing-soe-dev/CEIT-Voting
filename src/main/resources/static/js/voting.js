@@ -20,35 +20,71 @@
   };
   const capitalize = (s = '') => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
-  // --- Device ID + Pin Storage ---
-  // Use advanced fingerprinting for unique device identification
-  const getDeviceId = async () => {
+    // --- Device ID + Pin Storage ---
+    const safeLocalStorageGet = (key) => {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+    };
+    const safeLocalStorageSet = (key, value) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      // iOS private mode can block storage; ignore
+    }
+    };
+
+    const getServerDeviceIdFromCookie = () => {
+    const match = document.cookie.match(/(?:^|; )voting_device_id=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+    };
+
+    // Use advanced fingerprinting for unique device identification when possible
+    const getDeviceId = async () => {
+    // Highest priority: server-issued cookie (works even if storage blocked)
+    const cookieId = getServerDeviceIdFromCookie();
+    if (cookieId) {
+      safeLocalStorageSet('deviceId', cookieId);
+      return cookieId;
+    }
+
     // Try to use advanced fingerprinting if available
     if (window.DeviceFingerprint) {
       try {
         const fingerprint = await window.DeviceFingerprint.get();
-        localStorage.setItem('deviceId', fingerprint);
+        safeLocalStorageSet('deviceId', fingerprint);
         return fingerprint;
       } catch (e) {
         console.warn('Fingerprint generation failed, using fallback:', e);
       }
     }
     // Fallback to stored or random ID
-    let deviceId = localStorage.getItem('deviceId');
+    let deviceId = safeLocalStorageGet('deviceId');
     if (!deviceId) {
       deviceId = 'dev-' + Math.random().toString(36).slice(2);
-      localStorage.setItem('deviceId', deviceId);
+      safeLocalStorageSet('deviceId', deviceId);
     }
     return deviceId;
-  };
+    };
 
-  // Synchronous version for compatibility
-  const getDeviceIdSync = () => {
-    return localStorage.getItem('deviceId') || 'dev-' + Math.random().toString(36).slice(2);
-  };
+    // Synchronous version for compatibility
+    const getDeviceIdSync = () => {
+    const cookieId = getServerDeviceIdFromCookie();
+    if (cookieId) {
+      safeLocalStorageSet('deviceId', cookieId);
+      return cookieId;
+    }
+    const stored = safeLocalStorageGet('deviceId');
+    if (stored) return stored;
+    const fallback = 'dev-' + Math.random().toString(36).slice(2);
+    safeLocalStorageSet('deviceId', fallback);
+    return fallback;
+    };
 
-  const getStoredPin = () => localStorage.getItem('votingPin');
-  const savePin = (pin) => localStorage.setItem('votingPin', pin);
+    const getStoredPin = () => safeLocalStorageGet('votingPin');
+    const savePin = (pin) => safeLocalStorageSet('votingPin', pin);
 
   const selectionValueKey = (category) => `sel:${category}`;
   const selectedObjectKey = (category) => `sel:${category}:obj`;
@@ -223,7 +259,7 @@
     return res.json();
   };
 
-  const submitVotes = async ({ pin, deviceId, votes }) => {
+    const submitVotes = async ({ pin, deviceId, votes }) => {
     // Get all device identification data for multi-factor verification
     let fingerprint = null;
     let hardwareHash = null;
@@ -231,28 +267,22 @@
 
     if (window.DeviceFingerprint) {
       try {
-        // Get all device data at once
         const deviceData = await window.DeviceFingerprint.getDeviceData();
         fingerprint = deviceData.fingerprint;
         hardwareHash = deviceData.hardwareHash;
         screenInfo = deviceData.screenInfo;
       } catch (e) {
         console.warn('Device fingerprinting failed:', e);
-        // Try individual methods as fallback
-        try {
-          fingerprint = await window.DeviceFingerprint.get();
-        } catch (e2) {}
-        try {
-          hardwareHash = await window.DeviceFingerprint.getHardwareHash();
-        } catch (e3) {}
-        try {
-          screenInfo = window.DeviceFingerprint.getScreenInfo();
-        } catch (e4) {}
+        try { fingerprint = await window.DeviceFingerprint.get(); } catch (e2) {}
+        try { hardwareHash = await window.DeviceFingerprint.getHardwareHash(); } catch (e3) {}
+        try { screenInfo = window.DeviceFingerprint.getScreenInfo(); } catch (e4) {}
       }
     }
 
-    // Ensure we have a valid deviceId
-    const finalDeviceId = fingerprint || deviceId || ('dev-' + Math.random().toString(36).slice(2));
+    // Ensure we have a valid deviceId (prefer server cookie, then fingerprint, then provided, then random)
+    const cookieId = getServerDeviceIdFromCookie();
+    const finalDeviceId = cookieId || fingerprint || deviceId || ('dev-' + Math.random().toString(36).slice(2));
+    safeLocalStorageSet('deviceId', finalDeviceId);
 
     const requestBody = {
       pin,
@@ -267,6 +297,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
+      credentials: 'include'
     });
 
     const contentType = res.headers.get('content-type') || '';
@@ -280,7 +311,7 @@
     }
 
     return body;
-  };
+    };
   // Example frontend validation: disables same candidate number in the paired category.
   // Assumes inputs like: <select data-category="KING"> or radio inputs with data-category attribute.
 
