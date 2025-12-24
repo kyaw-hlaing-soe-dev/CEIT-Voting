@@ -1,20 +1,14 @@
 -- =====================================================================
--- Migration: Add User-Agent and IP Address tracking to voters table
--- Run this script if you already have an existing database with voters table
+-- Migration cleanup: remove User-Agent fingerprinting (deprecated)
+-- This script keeps only IP address tracking for auditing.
 -- =====================================================================
 
--- Add user_agent column for storing device User-Agent string
+-- Remove deprecated user_agent column if it exists
 ALTER TABLE voters
-ADD COLUMN IF NOT EXISTS user_agent VARCHAR(512);
+DROP COLUMN IF EXISTS user_agent;
 
--- Add ip_address column for storing client IP address
+-- Ensure ip_address column exists for IP-based checks
 ALTER TABLE voters
 ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45);
 
--- Comment explaining the purpose
-COMMENT ON COLUMN voters.user_agent IS 'Browser User-Agent string for device fingerprinting';
-COMMENT ON COLUMN voters.ip_address IS 'Client IP address for auditing and tracking';
-
--- Note: The device_id is now generated using SHA-256 hash of IP + User-Agent
--- This provides better device fingerprinting than IP-only approach
-
+COMMENT ON COLUMN voters.ip_address IS 'Client IP address for auditing and one-vote checks';

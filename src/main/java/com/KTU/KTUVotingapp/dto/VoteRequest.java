@@ -6,8 +6,7 @@ import com.KTU.KTUVotingapp.model.Category;
 
 public class VoteRequest {
 
-    // Device ID can be supplied by client but will be derived server-side if missing
-    private String deviceId;
+    private String cookieId;
 
     @NotBlank(message = "PIN is required")
     private String pin;
@@ -18,22 +17,17 @@ public class VoteRequest {
     @NotNull(message = "Candidate number is required")
     private Integer candidateNumber;
 
-    // For device fingerprinting and auditing
-    private String userAgent;
     private String ipAddress;
-    private String fingerprint;
-    private String hardwareHash;
-    private String screenInfo;
 
     public VoteRequest() {
     }
 
-    public String getDeviceId() {
-        return deviceId;
+    public String getCookieId() {
+        return cookieId;
     }
 
-    public void setDeviceId(String deviceId) {
-        this.deviceId = deviceId;
+    public void setCookieId(String cookieId) {
+        this.cookieId = cookieId;
     }
 
     public String getPin() {
@@ -60,43 +54,11 @@ public class VoteRequest {
         this.candidateNumber = candidateNumber;
     }
 
-    public String getUserAgent() {
-        return userAgent;
-    }
-
-    public void setUserAgent(String userAgent) {
-        this.userAgent = userAgent;
-    }
-
     public String getIpAddress() {
         return ipAddress;
     }
 
     public void setIpAddress(String ipAddress) {
         this.ipAddress = ipAddress;
-    }
-
-    public String getFingerprint() {
-        return fingerprint;
-    }
-
-    public void setFingerprint(String fingerprint) {
-        this.fingerprint = fingerprint;
-    }
-
-    public String getHardwareHash() {
-        return hardwareHash;
-    }
-
-    public void setHardwareHash(String hardwareHash) {
-        this.hardwareHash = hardwareHash;
-    }
-
-    public String getScreenInfo() {
-        return screenInfo;
-    }
-
-    public void setScreenInfo(String screenInfo) {
-        this.screenInfo = screenInfo;
     }
 }

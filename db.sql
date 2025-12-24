@@ -1,32 +1,25 @@
 -- KTU Voting App database bootstrap (PostgreSQL)
+-- Privacy-friendly: identification relies only on server-issued cookie_id and ip_address
 BEGIN;
 
--- 1) Voters capture per-device meta used for fraud prevention
+-- 1) Voters capture cookie/IP used for one-vote enforcement
 CREATE TABLE IF NOT EXISTS voters (
     id             BIGSERIAL PRIMARY KEY,
     pin            VARCHAR(5)   NOT NULL,
-    device_id      VARCHAR(255) NOT NULL,
-    user_agent     VARCHAR(512),
+    cookie_id      VARCHAR(255) NOT NULL,
     ip_address     VARCHAR(45),
-    fingerprint    VARCHAR(512),
-    hardware_hash  VARCHAR(128),
-    screen_info    VARCHAR(100),
     has_voted      BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at     TIMESTAMP    NOT NULL DEFAULT NOW(),
     voted_at       TIMESTAMP,
-    external_id    VARCHAR(255),
-    CONSTRAINT uk_device_id UNIQUE (device_id),
-    CONSTRAINT uk_external_id UNIQUE (external_id),
+    CONSTRAINT uk_cookie_id UNIQUE (cookie_id),
     CONSTRAINT chk_pin_length CHECK (char_length(pin) = 5)
 );
 CREATE INDEX IF NOT EXISTS idx_pin           ON voters(pin);
 CREATE INDEX IF NOT EXISTS idx_has_voted     ON voters(has_voted);
-CREATE INDEX IF NOT EXISTS idx_device_id     ON voters(device_id);
+CREATE INDEX IF NOT EXISTS idx_cookie_id     ON voters(cookie_id);
 CREATE INDEX IF NOT EXISTS idx_ip_address    ON voters(ip_address);
-CREATE INDEX IF NOT EXISTS idx_fingerprint   ON voters(fingerprint);
-CREATE INDEX IF NOT EXISTS idx_hardware_hash ON voters(hardware_hash);
 
--- 2) Candidates (category + candidate_number unique pair)
+-- 2) Candidates 
 CREATE TABLE IF NOT EXISTS candidates (
     id                BIGSERIAL PRIMARY KEY,
     category          VARCHAR(20)  NOT NULL,
@@ -178,7 +171,7 @@ DO UPDATE SET name = EXCLUDED.name,
               image_url = EXCLUDED.image_url;
 
 -- 7) Seed one reusable PIN for smoke tests
-INSERT INTO voters (pin, device_id, has_voted)
+INSERT INTO voters (pin, cookie_id, has_voted)
 SELECT '20267', 'shared-pin-seed', FALSE
 WHERE NOT EXISTS (SELECT 1 FROM voters WHERE pin = '20267');
 

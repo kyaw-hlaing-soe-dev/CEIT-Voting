@@ -5,16 +5,15 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "voters", 
+@Table(name = "voters",
     indexes = {
         @Index(name = "idx_pin", columnList = "pin"),
         @Index(name = "idx_has_voted", columnList = "has_voted"),
-        @Index(name = "idx_device_id", columnList = "device_id"),
-        @Index(name = "idx_ip_address", columnList = "ip_address"),
-        @Index(name = "idx_hardware_hash", columnList = "hardware_hash")
+        @Index(name = "idx_cookie_id", columnList = "cookie_id"),
+        @Index(name = "idx_ip_address", columnList = "ip_address")
     },
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_device_id", columnNames = "device_id")
+        @UniqueConstraint(name = "uk_cookie_id", columnNames = "cookie_id")
     }
 )
 public class Voter {
@@ -26,23 +25,11 @@ public class Voter {
     @Column(nullable = false, length = 5)
     private String pin;
 
-    @Column(name = "device_id", nullable = false, length = 255, unique = true)
-    private String deviceId;
-
-    @Column(name = "user_agent", length = 512)
-    private String userAgent;
+    @Column(name = "cookie_id", nullable = false, length = 255, unique = true)
+    private String cookieId;
 
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
-
-    @Column(name = "fingerprint", length = 512)
-    private String fingerprint;
-
-    @Column(name = "hardware_hash", length = 128)
-    private String hardwareHash;
-
-    @Column(name = "screen_info", length = 100)
-    private String screenInfo;
 
     @Column(name = "has_voted", nullable = false)
     private boolean hasVoted = false;
@@ -53,16 +40,12 @@ public class Voter {
     @Column(name = "voted_at")
     private LocalDateTime votedAt;
 
-    // Optional: an external identifier (username / uuid)
-    @Column(name = "external_id", unique = true)
-    private String externalId;
-
     public Voter() {
     }
 
-    public Voter(String pin, String deviceId) {
+    public Voter(String pin, String cookieId) {
         this.pin = pin;
-        this.deviceId = deviceId;
+        this.cookieId = cookieId;
     }
 
     public Long getId() {
@@ -77,20 +60,12 @@ public class Voter {
         this.pin = pin;
     }
 
-    public String getDeviceId() {
-        return deviceId;
+    public String getCookieId() {
+        return cookieId;
     }
 
-    public void setDeviceId(String deviceId) {
-        this.deviceId = deviceId;
-    }
-
-    public String getUserAgent() {
-        return userAgent;
-    }
-
-    public void setUserAgent(String userAgent) {
-        this.userAgent = userAgent;
+    public void setCookieId(String cookieId) {
+        this.cookieId = cookieId;
     }
 
     public String getIpAddress() {
@@ -99,30 +74,6 @@ public class Voter {
 
     public void setIpAddress(String ipAddress) {
         this.ipAddress = ipAddress;
-    }
-
-    public String getFingerprint() {
-        return fingerprint;
-    }
-
-    public void setFingerprint(String fingerprint) {
-        this.fingerprint = fingerprint;
-    }
-
-    public String getHardwareHash() {
-        return hardwareHash;
-    }
-
-    public void setHardwareHash(String hardwareHash) {
-        this.hardwareHash = hardwareHash;
-    }
-
-    public String getScreenInfo() {
-        return screenInfo;
-    }
-
-    public void setScreenInfo(String screenInfo) {
-        this.screenInfo = screenInfo;
     }
 
     public boolean isHasVoted() {
@@ -144,12 +95,4 @@ public class Voter {
     public void setVotedAt(LocalDateTime votedAt) {
         this.votedAt = votedAt;
     }
-
-    public Voter(String externalId) { this.externalId = externalId; }
-
-
-    public String getExternalId() { return externalId; }
-    public void setExternalId(String externalId) { this.externalId = externalId; }
-
-
 }

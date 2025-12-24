@@ -38,8 +38,7 @@ public class DeviceCookieFilter implements Filter {
                 newCookie.setPath("/");
                 newCookie.setHttpOnly(true); // Prevent client-side script access
                 newCookie.setMaxAge(COOKIE_MAX_AGE);
-                newCookie.setSecure(false); // Set to true when running under HTTPS
-                // newCookie.setSecure(true); // Enable in production with HTTPS
+                newCookie.setSecure(httpRequest.isSecure()); // secure when HTTPS
                 httpResponse.addCookie(newCookie);
             }
         }

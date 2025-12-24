@@ -1,21 +1,23 @@
--- Migration script to add multi-factor device identification columns
--- Run this SQL against your database before deploying the updated application
+-- Migration script to remove multi-factor device identification columns
+-- Run this SQL against your database to clean up after updating the application
 
--- Add hardware_hash column for cross-browser device identification
-ALTER TABLE voters ADD COLUMN IF NOT EXISTS hardware_hash VARCHAR(128);
+-- Drop hardware_hash column as it's no longer needed
+ALTER TABLE voters DROP COLUMN IF EXISTS hardware_hash;
 
--- Add screen_info column for screen resolution matching
-ALTER TABLE voters ADD COLUMN IF NOT EXISTS screen_info VARCHAR(100);
+-- Drop screen_info column as it's no longer needed
+ALTER TABLE voters DROP COLUMN IF EXISTS screen_info;
 
--- Add indexes for faster lookups
-CREATE INDEX IF NOT EXISTS idx_hardware_hash ON voters(hardware_hash);
-CREATE INDEX IF NOT EXISTS idx_screen_info ON voters(screen_info);
-CREATE INDEX IF NOT EXISTS idx_fingerprint ON voters(fingerprint);
-CREATE INDEX IF NOT EXISTS idx_ip_address ON voters(ip_address);
+-- Drop fingerprint column as it's no longer needed
+ALTER TABLE voters DROP COLUMN IF EXISTS fingerprint;
+
+-- Drop indexes related to the removed columns
+DROP INDEX IF EXISTS idx_hardware_hash;
+DROP INDEX IF EXISTS idx_screen_info;
+DROP INDEX IF EXISTS idx_fingerprint;
+-- Keep idx_ip_address as it is still used
 
 -- Verify the changes
 SELECT column_name, data_type, character_maximum_length
 FROM information_schema.columns
 WHERE table_name = 'voters'
 ORDER BY ordinal_position;
-
