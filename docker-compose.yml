@@ -1,96 +1,48 @@
 version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
     container_name: ktuvoting-postgres
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kkkkk11111}
-      - POSTGRES_DB=ktuvoting
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kkkkk11111}
+      POSTGRES_DB: ktuvoting
+      POSTGRES_INITDB_ARGS: --encoding=UTF-8
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     ports:
-      - "5432:5432"
+      - ./MIGRATION_MULTI_FACTOR.sql:/docker-entrypoint-initdb.d/04-multi-factor.sql:ro
+      - ./MIGRATION_COOKIE_BACKFILL.sql:/docker-entrypoint-initdb.d/03-cookie-backfill.sql:ro
+      - ./MIGRATION_USER_AGENT.sql:/docker-entrypoint-initdb.d/02-user-agent.sql:ro
+      - ./db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - voting-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ktuvoting"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-    restart: unless-stopped
+  app:
+    image: eclipse-temurin:21-jre-jammy
+    container_name: ktuvoting-app
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "8080:${PORT:-8080}"
     networks:
       - voting-network
-    command:
-      - postgres
-      - -c
-      - max_connections=200
-      - -c
-      - shared_buffers=256MB
-      - -c
-      - effective_cache_size=1GB
-      - -c
-      - maintenance_work_mem=64MB
-      - -c
-      - checkpoint_completion_target=0.9
-      - -c
-      - wal_buffers=16MB
-      - -c
-      - default_statistics_target=100
-      - -c
-      - random_page_cost=1.1
-      - -c
-      - effective_io_concurrency=200
-      - -c
-      - work_mem=4MB
-      - -c
-      - min_wal_size=1GB
-      - -c
-      - max_wal_size=4GB
-
-  ktuvotingapp:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ktuvotingapp:latest
-    container_name: ktuvoting-app
-    ports:
-      - "8080:8080"
-      - "9090:9090"
-    environment:
-      - SPRING_PROFILES_ACTIVE=prod
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/ktuvoting
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-kkkkk11111}
-      - ADMIN_PIN=${ADMIN_PIN:-88296}
-      - JAVA_OPTS=-XX:+UseG1GC -Xms2g -Xmx4g -XX:MaxGCPauseMillis=200
     depends_on:
       postgres:
         condition: service_healthy
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8080}/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    networks:
-      - voting-network
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 6G
-        reservations:
-          cpus: '2'
-          memory: 4G
-
 volumes:
   postgres-data:
-    driver: local
-
 networks:
   voting-network:
-    driver: bridge
