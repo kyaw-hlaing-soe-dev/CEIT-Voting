@@ -34,7 +34,7 @@ ENV SPRING_PROFILES_ACTIVE=prod
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-8080}/actuator/health || exit 1
+  CMD curl -f http://localhost:${MANAGEMENT_SERVER_PORT:-${PORT:-8080}}/actuator/health || exit 1
 
 # Run Spring Boot with optimized JVM settings for cloud (limited memory)
 # -XX:+UseContainerSupport: Use container-aware memory settings
