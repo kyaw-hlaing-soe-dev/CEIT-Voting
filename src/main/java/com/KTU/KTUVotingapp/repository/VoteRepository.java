@@ -30,6 +30,8 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 
     boolean existsByVoter(Voter voter);
 
+    boolean existsByIpAddressAndVoterCookieId(String ipAddress, String voterCookieId);
+
     @Query("SELECT COUNT(v) FROM Vote v WHERE v.category = :category")
     long countByCategory(@Param("category") Category category);
 

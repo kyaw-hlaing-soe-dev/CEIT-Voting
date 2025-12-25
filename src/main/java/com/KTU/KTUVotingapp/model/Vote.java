@@ -13,7 +13,8 @@ import java.time.LocalDateTime;
         @Index(name = "idx_voter_category", columnList = "voter_id, category")
     },
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_voter_category", columnNames = {"voter_id", "category"})
+        @UniqueConstraint(name = "uk_voter_category", columnNames = {"voter_id", "category"}),
+        @UniqueConstraint(name = "uk_ip_cookie", columnNames = {"ip_address", "voter_cookie_id"})
     }
 )
 public class Vote {
@@ -40,6 +41,13 @@ public class Vote {
 
     @Column(name = "candidate_number")
     private Integer candidateNumber;
+
+    // New fields for deduplication by IP and cookie
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
+
+    @Column(name = "voter_cookie_id", length = 255)
+    private String voterCookieId;
 
     public Vote() {
     }
@@ -90,5 +98,11 @@ public class Vote {
     public Integer getCandidateNumber() { return candidateNumber; }
     public void setCandidateNumber(Integer candidateNumber) { this.candidateNumber = candidateNumber; }
 
+    // New getters/setters
+    public String getIpAddress() { return ipAddress; }
+    public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+
+    public String getVoterCookieId() { return voterCookieId; }
+    public void setVoterCookieId(String voterCookieId) { this.voterCookieId = voterCookieId; }
 
 }
