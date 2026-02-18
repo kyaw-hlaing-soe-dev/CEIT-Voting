@@ -28,6 +28,12 @@ public interface CandidateRepository extends JpaRepository<Candidate, Long> {
     @Query("UPDATE Candidate c SET c.voteCount = c.voteCount + 1 WHERE c.id = :id")
     int incrementVoteCount(@Param("id") Long id);
 
+    // Atomic DB-side weighted increment for RBAC (admin votes count as 2, user votes as 1).
+    @Modifying
+    @Transactional
+    @Query("UPDATE Candidate c SET c.voteCount = c.voteCount + :weight WHERE c.id = :id")
+    int incrementVoteCountByWeight(@Param("id") Long id, @Param("weight") int weight);
+
     // Existence check for candidateNumber across a set of categories
     boolean existsByCategoryInAndCandidateNumber(Iterable<Category> categories, Integer candidateNumber);
 

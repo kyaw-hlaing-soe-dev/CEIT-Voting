@@ -27,7 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect"
+        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
+        "voting.admin-pin=99999",
+        "voting.user-pin=12345"
 })
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class VotingServiceConcurrencyTest {
@@ -65,7 +67,7 @@ public class VotingServiceConcurrencyTest {
         AtomicInteger conflicts = new AtomicInteger(0);
 
         List<Runnable> tasks = new ArrayList<>();
-        String deviceId = "device-123";
+        String cookieId = "cookie-123";
         String pin = "12345";
 
         for (int i = 0; i < threads; i++) {
@@ -74,7 +76,7 @@ public class VotingServiceConcurrencyTest {
                 try {
                     start.await();
                     VoteRequest req = new VoteRequest();
-                    req.setDeviceId(deviceId);
+                    req.setCookieId(cookieId);
                     req.setPin(pin);
                     req.setCategory(Category.KING);
                     req.setCandidateNumber(1);

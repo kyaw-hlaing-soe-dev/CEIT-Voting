@@ -40,12 +40,22 @@ public class Voter {
     @Column(name = "voted_at")
     private LocalDateTime votedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "user_role", nullable = false, length = 20)
+    private UserRole userRole = UserRole.ROLE_USER;
+
     public Voter() {
     }
 
     public Voter(String pin, String cookieId) {
         this.pin = pin;
         this.cookieId = cookieId;
+    }
+
+    public Voter(String pin, String cookieId, UserRole userRole) {
+        this.pin = pin;
+        this.cookieId = cookieId;
+        this.userRole = userRole;
     }
 
     public Long getId() {
@@ -94,5 +104,13 @@ public class Voter {
 
     public void setVotedAt(LocalDateTime votedAt) {
         this.votedAt = votedAt;
+    }
+
+    public UserRole getUserRole() {
+        return userRole;
+    }
+
+    public void setUserRole(UserRole userRole) {
+        this.userRole = userRole;
     }
 }

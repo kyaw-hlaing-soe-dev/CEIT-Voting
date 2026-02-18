@@ -6,7 +6,7 @@ services:
     container_name: ktuvoting-postgres
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kkkkk11111}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_DB=ktuvoting
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     volumes:
@@ -54,8 +54,9 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/ktuvoting
       - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-kkkkk11111}
-      - ADMIN_PIN=${ADMIN_PIN:-99999}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - ADMIN_PIN=${ADMIN_PIN:?ADMIN_PIN is required}
+      - USER_PIN=${USER_PIN:?USER_PIN is required}
       # Reduced Xmx slightly to leave room for non-heap memory
       - JAVA_OPTS=-XX:+UseG1GC -Xms2g -Xmx3500m -XX:MaxGCPauseMillis=200
     depends_on:

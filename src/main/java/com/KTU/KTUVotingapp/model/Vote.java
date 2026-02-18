@@ -42,6 +42,10 @@ public class Vote {
     @Column(name = "candidate_number")
     private Integer candidateNumber;
 
+    // Vote weight based on user role (1 for USER, 2 for ADMIN)
+    @Column(name = "weight", nullable = false)
+    private Integer weight = 1;
+
     // New fields for deduplication by IP and cookie
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
@@ -58,6 +62,8 @@ public class Vote {
         this.category = category;
         // ensure candidateNumber is populated when a Candidate is provided
         this.candidateNumber = candidate != null ? candidate.getCandidateNumber() : null;
+        // Set weight based on voter's role
+        this.weight = voter != null && voter.getUserRole() != null ? voter.getUserRole().getVoteWeight() : 1;
     }
 
     public Long getId() {
@@ -70,6 +76,10 @@ public class Vote {
 
     public void setVoter(Voter voter) {
         this.voter = voter;
+        // Update weight when voter is set
+        if (voter != null && voter.getUserRole() != null) {
+            this.weight = voter.getUserRole().getVoteWeight();
+        }
     }
 
     public Candidate getCandidate() {
@@ -97,6 +107,9 @@ public class Vote {
 
     public Integer getCandidateNumber() { return candidateNumber; }
     public void setCandidateNumber(Integer candidateNumber) { this.candidateNumber = candidateNumber; }
+
+    public Integer getWeight() { return weight; }
+    public void setWeight(Integer weight) { this.weight = weight; }
 
     // New getters/setters
     public String getIpAddress() { return ipAddress; }

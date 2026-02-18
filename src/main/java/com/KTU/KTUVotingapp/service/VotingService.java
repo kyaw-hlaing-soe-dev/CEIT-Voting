@@ -4,11 +4,13 @@ import com.KTU.KTUVotingapp.dto.BulkVoteRequest;
 import com.KTU.KTUVotingapp.dto.VoteRequest;
 import com.KTU.KTUVotingapp.model.Candidate;
 import com.KTU.KTUVotingapp.model.Category;
+import com.KTU.KTUVotingapp.model.UserRole;
 import com.KTU.KTUVotingapp.model.Vote;
 import com.KTU.KTUVotingapp.model.Voter;
 import com.KTU.KTUVotingapp.repository.CandidateRepository;
 import com.KTU.KTUVotingapp.repository.VoteRepository;
 import com.KTU.KTUVotingapp.repository.VoterRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -30,11 +32,25 @@ public class VotingService {
     private final VoteRepository voteRepository;
     private final CandidateRepository candidateRepository;
 
+    @Value("${voting.admin-pin:}")
+    private String adminPin;
+
     public VotingService(VoterRepository voterRepository, VoteRepository voteRepository,
                         CandidateRepository candidateRepository) {
         this.voterRepository = voterRepository;
         this.voteRepository = voteRepository;
         this.candidateRepository = candidateRepository;
+    }
+
+    /**
+     * Determines the user role based on the PIN.
+     * Admin PIN gets ROLE_ADMIN (vote weight = 2), User PIN gets ROLE_USER (vote weight = 1).
+     */
+    private UserRole determineUserRole(String pin) {
+        if (adminPin != null && !adminPin.isEmpty() && adminPin.equals(pin)) {
+            return UserRole.ROLE_ADMIN;
+        }
+        return UserRole.ROLE_USER;
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
@@ -51,8 +67,11 @@ public class VotingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This network/IP has already been used to vote.");
         }
 
-        Voter voter = getOrCreateVoter(request.getPin(), cookieId, ipAddress);
+        // Determine role based on PIN
+        UserRole userRole = determineUserRole(request.getPin());
+        Voter voter = getOrCreateVoter(request.getPin(), cookieId, ipAddress, userRole);
 
+        // Idempotency check: prevent double voting for the same category
         if (voter.isHasVoted() || voteRepository.existsByVoterAndCategory(voter, request.getCategory())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "You have already voted in this category.");
         }
@@ -68,7 +87,10 @@ public class VotingService {
         try {
             Vote vote = new Vote(voter, candidate, request.getCategory());
             voteRepository.save(vote);
-            candidateRepository.incrementVoteCount(candidate.getId());
+            
+            // Use weighted vote count based on user role
+            int voteWeight = voter.getUserRole().getVoteWeight();
+            candidateRepository.incrementVoteCountByWeight(candidate.getId(), voteWeight);
 
             if (!voter.isHasVoted()) {
                 voter.setHasVoted(true);
@@ -95,8 +117,11 @@ public class VotingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This network/IP has already been used to vote.");
         }
 
-        Voter voter = getOrCreateVoter(request.getPin(), cookieId, ipAddress);
+        // Determine role based on PIN
+        UserRole userRole = determineUserRole(request.getPin());
+        Voter voter = getOrCreateVoter(request.getPin(), cookieId, ipAddress, userRole);
 
+        // Idempotency check: prevent double voting
         if (voter.isHasVoted() || voteRepository.existsByVoter(voter)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This browser has already submitted votes.");
         }
@@ -119,6 +144,9 @@ public class VotingService {
         }
 
         try {
+            // Get vote weight based on user role
+            int voteWeight = voter.getUserRole().getVoteWeight();
+            
             for (BulkVoteRequest.VoteItem voteItem : request.getVotes()) {
                 Candidate candidate = candidateRepository.findByCategoryAndCandidateNumber(
                         voteItem.getCategory(), voteItem.getCandidateNumber())
@@ -128,7 +156,9 @@ public class VotingService {
 
                 Vote vote = new Vote(voter, candidate, voteItem.getCategory());
                 voteRepository.save(vote);
-                candidateRepository.incrementVoteCount(candidate.getId());
+                
+                // Use weighted vote count
+                candidateRepository.incrementVoteCountByWeight(candidate.getId(), voteWeight);
             }
 
             if (!voter.isHasVoted()) {
@@ -142,7 +172,7 @@ public class VotingService {
         }
     }
 
-    private Voter getOrCreateVoter(String pin, String cookieId, String ipAddress) {
+    private Voter getOrCreateVoter(String pin, String cookieId, String ipAddress, UserRole userRole) {
         Optional<Voter> voterOpt = cookieId == null ? Optional.empty() : voterRepository.findByCookieId(cookieId);
 
         if (voterOpt.isPresent()) {
@@ -157,7 +187,7 @@ public class VotingService {
         String idToUse = (cookieId == null || cookieId.isBlank()) ? "cookie-" + java.util.UUID.randomUUID() : cookieId;
 
         try {
-            Voter newVoter = new Voter(pin, idToUse);
+            Voter newVoter = new Voter(pin, idToUse, userRole);
             newVoter.setIpAddress(ipAddress);
             return voterRepository.save(newVoter);
         } catch (DataIntegrityViolationException e) {
@@ -235,4 +265,3 @@ public class VotingService {
         );
     }
 }
-
