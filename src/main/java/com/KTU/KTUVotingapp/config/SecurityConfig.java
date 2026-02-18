@@ -1,8 +1,5 @@
 package com.KTU.KTUVotingapp.config;
 
-import com.KTU.KTUVotingapp.model.UserRole;
-import com.KTU.KTUVotingapp.model.Voter;
-import com.KTU.KTUVotingapp.repository.VoterRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,7 +12,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -44,9 +40,16 @@ public class SecurityConfig {
     /**
      * Security filter chain for Admin endpoints.
      * Admin endpoints are physically separated and protected.
+     * 
+     * CSRF protection is disabled because this is a stateless REST API that:
+     * - Uses PIN-based authentication (not cookie-based session)
+     * - Uses SessionCreationPolicy.STATELESS
+     * - Does not rely on browser-managed session cookies for authentication
+     * CSRF attacks target session cookies, which are not used here.
      */
     @Bean
     @Order(1)
+    @SuppressWarnings("java:S4502") // CSRF is intentionally disabled for stateless API
     public SecurityFilterChain adminSecurityFilterChain(HttpSecurity http) throws Exception {
         http
             .securityMatcher("/api/admin/**")
@@ -63,9 +66,12 @@ public class SecurityConfig {
     /**
      * Security filter chain for voting endpoints.
      * Both users and admins can vote, but with different weights.
+     * 
+     * CSRF protection is disabled for stateless REST API (see adminSecurityFilterChain).
      */
     @Bean
     @Order(2)
+    @SuppressWarnings("java:S4502") // CSRF is intentionally disabled for stateless API
     public SecurityFilterChain votingSecurityFilterChain(HttpSecurity http) throws Exception {
         http
             .securityMatcher("/api/voting/**", "/api/votes/**")
@@ -83,9 +89,12 @@ public class SecurityConfig {
     /**
      * Default security filter chain for public endpoints.
      * Allows access to authentication endpoints, static resources, and actuator.
+     * 
+     * CSRF protection is disabled for stateless REST API (see adminSecurityFilterChain).
      */
     @Bean
     @Order(3)
+    @SuppressWarnings("java:S4502") // CSRF is intentionally disabled for stateless API
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
@@ -102,8 +111,8 @@ public class SecurityConfig {
                     "/styles.css", "/js/**", "/images/**", "/favicon.ico").permitAll()
                 // Actuator endpoints for health checks
                 .requestMatchers("/actuator/**").permitAll()
-                // Any other request requires authentication
-                .anyRequest().permitAll()
+                // Any other request is denied by default for security
+                .anyRequest().denyAll()
             );
         return http.build();
     }
@@ -135,16 +144,5 @@ public class SecurityConfig {
             
             throw new BadCredentialsException("Invalid PIN");
         };
-    }
-
-    /**
-     * Determines the UserRole based on the PIN.
-     * Admin PIN gets ROLE_ADMIN, User PIN gets ROLE_USER.
-     */
-    public UserRole getRoleByPin(String pin) {
-        if (adminPin != null && !adminPin.isEmpty() && adminPin.equals(pin)) {
-            return UserRole.ROLE_ADMIN;
-        }
-        return UserRole.ROLE_USER;
     }
 }

@@ -109,7 +109,10 @@ public class Vote {
     public void setCandidateNumber(Integer candidateNumber) { this.candidateNumber = candidateNumber; }
 
     public Integer getWeight() { return weight; }
-    public void setWeight(Integer weight) { this.weight = weight; }
+    
+    // Weight is automatically set based on voter's role
+    // Package-private to prevent external modification
+    void setWeight(Integer weight) { this.weight = weight; }
 
     // New getters/setters
     public String getIpAddress() { return ipAddress; }
