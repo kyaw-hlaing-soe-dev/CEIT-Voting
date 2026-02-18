@@ -2,6 +2,7 @@ package com.KTU.KTUVotingapp.controller;
 
 import java.util.Map;
 
+import com.KTU.KTUVotingapp.model.UserRole;
 import com.KTU.KTUVotingapp.service.RateLimitService;
 import com.KTU.KTUVotingapp.service.VotingService;
 import jakarta.servlet.http.Cookie;
@@ -16,10 +17,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    @Value("${voting.user-pin}")
+    @Value("${voting.user-pin:}")
     private String userPin;
 
-    @Value("${voting.admin-pin}")
+    @Value("${voting.admin-pin:}")
     private String adminPin;
 
     private final VotingService votingService;
@@ -30,6 +31,10 @@ public class AuthController {
         this.rateLimitService = rateLimitService;
     }
 
+    /**
+     * Verify PIN and return the appropriate role (RBAC-based).
+     * Uses Spring Security authorities (ROLE_ADMIN, ROLE_USER) instead of simple boolean.
+     */
     @PostMapping("/verify-pin")
     public ResponseEntity<?> verifyPin(@RequestBody Map<String, Object> body,
                                        HttpServletRequest request,
@@ -56,25 +61,31 @@ public class AuthController {
         boolean ipAlreadyVoted = votingService.ipHasVoted(clientIp);
         boolean alreadyVoted = cookieAlreadyVoted || ipAlreadyVoted;
 
-        if (pin.equals(userPin)) {
+        // RBAC-based authentication using Spring Security authorities
+        if (adminPin != null && !adminPin.isEmpty() && pin.equals(adminPin)) {
+            rateLimitService.recordAttempt(clientIp, true);
+
+            return ResponseEntity.ok(Map.of(
+                "valid", true,
+                "alreadyVoted", false, // Admins can always access admin panel
+                "role", UserRole.ROLE_ADMIN.name(),
+                "authority", "ROLE_ADMIN",
+                "voteWeight", UserRole.ROLE_ADMIN.getVoteWeight(),
+                "deviceId", cookieId
+            ));
+        }
+        
+        if (userPin != null && !userPin.isEmpty() && pin.equals(userPin)) {
             rateLimitService.recordAttempt(clientIp, true);
 
             return ResponseEntity.ok(Map.of(
                 "valid", true,
                 "alreadyVoted", alreadyVoted,
-                "role", "user",
+                "role", UserRole.ROLE_USER.name(),
+                "authority", "ROLE_USER",
+                "voteWeight", UserRole.ROLE_USER.getVoteWeight(),
                 "deviceId", cookieId,
                 "remainingAttempts", rateLimitResult.getRemainingAttempts()
-            ));
-        }
-        if (pin.equals(adminPin)) {
-            rateLimitService.recordAttempt(clientIp, true);
-
-            return ResponseEntity.ok(Map.of(
-                "valid", true,
-                "alreadyVoted", false,
-                "role", "admin",
-                "deviceId", cookieId
             ));
         }
 

@@ -37,3 +37,14 @@ build/
 
 ### Windows ###
 Thumbs.db
+
+### Sensitive Files ###
+.env
+.env.local
+.env.*.local
+application-local.properties
+!.env.example
+
+### Temporary and Log files ###
+*.log
+tmp_*.log
