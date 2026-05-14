@@ -337,7 +337,10 @@
                 VotingApp.getDeviceId();
             }
 
-            const isAdmin = (typeof result.isAdmin !== 'undefined') ? result.isAdmin : (result.role === 'admin');
+            const isAdmin = result.isAdmin === true
+                || result.authority === 'ROLE_ADMIN'
+                || result.role === 'ROLE_ADMIN'
+                || result.role === 'ADMIN';
             window.location.assign(isAdmin ? '/admin-dashboard' : '/king-selection');
         } catch (err) {
             console.error('Error during verifyPin:', err);

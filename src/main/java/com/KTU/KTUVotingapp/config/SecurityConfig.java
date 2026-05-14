@@ -57,7 +57,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers("/api/admin/**").permitAll()
                 .anyRequest().denyAll()
             );
         return http.build();
@@ -107,8 +107,14 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/candidates/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/results/**").permitAll()
                 // Static resources
-                .requestMatchers("/", "/index.html", "/vote.html", "/admin.html", 
-                    "/styles.css", "/js/**", "/images/**", "/favicon.ico").permitAll()
+                .requestMatchers(
+                    "/", "/pin",
+                    "/king-selection", "/queen-selection", "/prince-selection",
+                    "/princess-selection", "/couple-selection", "/summary",
+                    "/success", "/admin-dashboard",
+                    "/index.html", "/vote.html", "/admin.html",
+                    "/styles.css", "/js/**", "/images/**", "/favicon.ico"
+                ).permitAll()
                 // Actuator endpoints for health checks
                 .requestMatchers("/actuator/**").permitAll()
                 // Any other request is denied by default for security

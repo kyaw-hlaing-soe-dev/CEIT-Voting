@@ -1,6 +1,7 @@
 package com.KTU.KTUVotingapp.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.LocalDateTime;
 
@@ -44,6 +45,7 @@ public class Vote {
 
     // Vote weight based on user role (1 for USER, 2 for ADMIN)
     @Column(name = "weight", nullable = false)
+    @ColumnDefault("1")
     private Integer weight = 1;
 
     // New fields for deduplication by IP and cookie

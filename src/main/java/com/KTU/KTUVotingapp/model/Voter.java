@@ -1,6 +1,7 @@
 package com.KTU.KTUVotingapp.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.LocalDateTime;
 
@@ -42,6 +43,7 @@ public class Voter {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "user_role", nullable = false, length = 20)
+    @ColumnDefault("'ROLE_USER'")
     private UserRole userRole = UserRole.ROLE_USER;
 
     public Voter() {
